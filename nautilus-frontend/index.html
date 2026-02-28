@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nautilus · 鹦鹉螺媒体云</title>
+
+  <!-- 防止浏览器缓存旧代码 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'abyss': '#050d1a',
+            'deep': '#0a1628',
+            'ocean': '#0f2040',
+            'current': '#1a3a5c',
+            'foam': '#2a5a8c',
+            'mist': '#4a8ab5',
+            'pearl': '#8ab8d4',
+          },
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans SC"', 'sans-serif'],
+          },
+          backdropBlur: {
+            xs: '2px',
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'float': 'float 6s ease-in-out infinite',
+            'shimmer': 'shimmer 2s linear infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-8px)' },
+            },
+            shimmer: {
+              '0%': { backgroundPosition: '-200% 0' },
+              '100%': { backgroundPosition: '200% 0' },
+            },
+          },
+        },
+      },
+    }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap"
+    rel="stylesheet" />
+
+  <style>
+    /* ===== 深海背景 ===== */
+    body {
+      background: radial-gradient(ellipse at 20% 20%, #0d2040 0%, #050d1a 40%, #020810 100%);
+      min-height: 100vh;
+    }
+
+    /* 动态光晕粒子 */
+    .bg-orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .bg-orb-1 {
+      width: 600px;
+      height: 600px;
+      background: #1a4a8c;
+      top: -200px;
+      left: -200px;
+      animation: float 8s ease-in-out infinite;
+    }
+
+    .bg-orb-2 {
+      width: 400px;
+      height: 400px;
+      background: #0a3060;
+      bottom: -100px;
+      right: -100px;
+      animation: float 10s ease-in-out infinite reverse;
+    }
+
+    .bg-orb-3 {
+      width: 300px;
+      height: 300px;
+      background: #2a6090;
+      top: 40%;
+      left: 50%;
+      animation: float 12s ease-in-out infinite 2s;
+    }
+
+    /* ===== 玻璃拟态面板 ===== */
+    .glass {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .glass-strong {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(32px);
+      -webkit-backdrop-filter: blur(32px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .glass-input {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+
+    .glass-input:focus {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(74, 138, 181, 0.6);
+      box-shadow: 0 0 0 3px rgba(74, 138, 181, 0.15);
+    }
+
+    .glass-input::placeholder {
+      color: rgba(148, 163, 184, 0.5);
+    }
+
+    /* ===== 状态徽章 ===== */
+    .badge-pending {
+      background: rgba(251, 191, 36, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.3);
+    }
+
+    .badge-running {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .badge-success {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .badge-failed {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    /* ===== 按钮 ===== */
+    .btn-primary {
+      background: linear-gradient(135deg, #1e4a8c 0%, #2a6ab5 100%);
+      border: 1px solid rgba(74, 138, 181, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #2a5aa8 0%, #3a7ac8 100%);
+      box-shadow: 0 8px 32px rgba(42, 106, 181, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* ===== 任务卡片 ===== */
+    .task-card {
+      transition: all 0.3s ease;
+    }
+
+    .task-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(74, 138, 181, 0.3) !important;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ===== 加载动画 ===== */
+    .spinner {
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* RUNNING 状态脉冲点 */
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: #60a5fa;
+      border-radius: 50%;
+      animation: pulse-ring 1.5s ease-out infinite;
+    }
+
+    @keyframes pulse-ring {
+      0% {
+        box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.6);
+      }
+
+      70% {
+        box-shadow: 0 0 0 8px rgba(96, 165, 250, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);
+      }
+    }
+
+    /* ===== 通知 Toast ===== */
+    .toast-enter {
+      animation: toastIn 0.35s ease forwards;
+    }
+
+    .toast-leave {
+      animation: toastOut 0.3s ease forwards;
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes toastOut {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      to {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+    }
+
+    /* ===== 滚动条 ===== */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(74, 138, 181, 0.3);
+      border-radius: 2px;
+    }
+
+    /* ===== 缩略图 ===== */
+    .thumbnail-shimmer {
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.8s infinite;
+    }
+
+    /* ===== 分割线 ===== */
+    .divider {
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+
+    /* ===== 模态框遮罩 ===== */
+    .modal-overlay {
+      background: rgba(2, 8, 16, 0.75);
+      backdrop-filter: blur(4px);
+    }
+  </style>
+</head>
+
+<body class="font-sans text-slate-200 relative overflow-x-hidden">
+
+  <!-- 深海光晕背景 -->
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+  <div class="bg-orb bg-orb-3"></div>
+
+  <div id="app" class="relative z-10 min-h-screen flex flex-col">
+
+    <!-- ===== 顶部导航栏 ===== -->
+    <header class="glass-strong sticky top-0 z-50 px-6 py-4">
+      <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <!-- Logo -->
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl glass flex items-center justify-center border border-mist/30">
+            <svg class="w-5 h-5 text-pearl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke-linecap="round" />
+              <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" stroke-linecap="round" />
+              <path d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="currentColor" />
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-base font-semibold text-white tracking-wide">Nautilus</h1>
+            <p class="text-xs text-slate-400 leading-none">媒体云调度中台</p>
+          </div>
+        </div>
+
+        <!-- 中间状态 -->
+        <div class="hidden md:flex items-center gap-6">
+          <div class="flex items-center gap-2 text-sm text-slate-400">
+            <div
+              :class="['w-2 h-2 rounded-full transition-all duration-500', apiOnline ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-slate-600']">
+            </div>
+            <span v-text="apiOnline ? '调度中心在线' : '调度中心离线'"></span>
+          </div>
+          <div v-if="autoRefresh" class="flex items-center gap-2 text-sm text-blue-400">
+            <div class="w-3 h-3 spinner"></div>
+            <span>实时监听中</span>
+          </div>
+        </div>
+
+        <!-- 右侧操作 -->
+        <div class="flex items-center gap-3">
+          <button @click="toggleAutoRefresh" :class="['btn-ghost px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all duration-300',
+                     autoRefresh ? 'text-blue-400 border-blue-400/30' : 'text-slate-400']">
+            <svg class="w-4 h-4" :class="autoRefresh ? 'animate-pulse' : ''" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+            <span v-text="autoRefresh ? '暂停推送' : '开启推送'"></span>
+          </button>
+          <button @click="showCreateModal = true"
+            class="btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white flex items-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14" stroke-linecap="round" />
+            </svg>
+            投递任务
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== 主体内容 ===== -->
+    <main class="flex-1 max-w-7xl mx-auto w-full px-6 py-8">
+
+      <!-- 统计卡片行 -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div v-for="stat in stats" :key="stat.label" class="glass rounded-2xl p-5 shadow-2xl task-card">
+          <div class="flex items-start justify-between mb-3">
+            <div :class="['w-10 h-10 rounded-xl flex items-center justify-center', stat.iconBg]">
+              <span class="text-lg" v-text="stat.icon"></span>
+            </div>
+            <span :class="['text-xs px-2 py-1 rounded-lg font-medium', stat.badgeClass]">
+              <span v-text="stat.trend"></span>
+            </span>
+          </div>
+          <div class="text-2xl font-bold text-white mb-1" v-text="stat.count"></div>
+          <div class="text-xs text-slate-400" v-text="stat.label"></div>
+        </div>
+      </div>
+
+      <!-- 任务列表区 -->
+      <div class="glass-strong rounded-2xl shadow-2xl overflow-hidden">
+        <!-- 列表头 -->
+        <div class="px-6 py-4 border-b divider space-y-3">
+
+          <!-- 第一行: 标题 + 状态筛选 + 刷新 -->
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 class="text-base font-semibold text-white">任务流水</h2>
+              <p class="text-xs text-slate-500 mt-0.5">每一帧画面，都是深海里的一封信</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <!-- 状态筛选 -->
+              <div class="flex gap-1.5">
+                <button v-for="f in filters" :key="f.value" @click="activeFilter = f.value" :class="['px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300',
+                           activeFilter === f.value
+                             ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                             : 'text-slate-500 hover:text-slate-300 hover:bg-white/5']">
+                  <span v-text="f.label"></span>
+                </button>
+              </div>
+              <button @click="fetchTasks"
+                class="btn-ghost w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">
+                <svg class="w-4 h-4" :class="loading ? 'animate-spin' : ''" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 第二行: 搜索框 + 批量操作工具栏 -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- 搜索框 -->
+            <div class="relative flex-1 min-w-[180px]">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" stroke-linecap="round" />
+              </svg>
+              <input v-model="searchQuery" type="text" placeholder="搜索任务名、URL、艺术家..."
+                class="glass-input w-full pl-9 pr-4 py-2 rounded-xl text-xs" />
+            </div>
+
+            <!-- 批量操作：有勾选时出现 -->
+            <template v-if="selectedIds.size > 0">
+              <span class="text-xs text-slate-400 px-2">已选 <strong class="text-white"
+                  v-text="selectedIds.size"></strong> 条</span>
+              <button @click="batchDelete" :disabled="batchDeleting"
+                class="px-3 py-2 rounded-xl text-xs font-medium text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                <svg class="w-3.5 h-3.5" :class="batchDeleting ? 'animate-spin' : ''" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <template v-if="batchDeleting">
+                    <path
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      stroke-linecap="round" stroke-linejoin="round" />
+                  </template>
+                  <template v-else>
+                    <path
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      stroke-linecap="round" stroke-linejoin="round" />
+                  </template>
+                </svg>
+                <span v-text="batchDeleting ? '删除中...' : '批量删除'"></span>
+              </button>
+            </template>
+
+            <!-- 一键清空失败任务按钮（始终显示） -->
+            <button @click="clearFailed"
+              class="px-3 py-2 rounded-xl text-xs font-medium text-slate-400 border border-white/10 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              清空失败
+            </button>
+          </div>
+        </div>
+
+        <!-- 加载中 -->
+        <div v-if="loading && tasks.length === 0" class="flex flex-col items-center justify-center py-20 gap-4">
+          <div class="w-10 h-10 spinner"></div>
+          <p class="text-slate-500 text-sm">深海正在回响...</p>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-else-if="!loading && filteredTasks.length === 0"
+          class="flex flex-col items-center justify-center py-20 gap-4">
+          <div class="w-16 h-16 rounded-2xl glass flex items-center justify-center text-3xl animate-float">🌊</div>
+          <p class="text-slate-400 text-sm font-medium">海面平静，暂无任务</p>
+          <p class="text-slate-600 text-xs">又三郎还没有带来任何消息</p>
+        </div>
+
+        <!-- 任务列表（点击行展开详情，无弹层） -->
+        <div v-else class="divide-y divide-white/[0.04]">
+          <div v-for="task in filteredTasks" :key="task.taskId" class="border-b border-white/[0.04]">
+            <div class="task-card glass px-6 py-5 flex items-start gap-4 cursor-pointer"
+              @click="toggleExpand(task.taskId)">
+
+              <!-- 复选框 (阻止冒泡，避免同时触发展开) -->
+              <div class="flex-shrink-0 flex items-center self-center" @click.stop>
+                <input type="checkbox" :checked="selectedIds.has(task.taskId)" @change="toggleSelect(task.taskId)"
+                  class="w-4 h-4 rounded accent-blue-400 cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
+                  :class="selectedIds.has(task.taskId) ? 'opacity-100' : ''" />
+              </div>
+
+              <!-- 缩略图 -->
+              <div class="flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden glass">
+                <img v-if="task?.metaInfo?.thumbnail" :src="task.metaInfo.thumbnail" class="w-full h-full object-cover"
+                  @error="$event.target.style.display='none'" />
+                <div v-else class="w-full h-full thumbnail-shimmer flex items-center justify-center text-xl">🎵</div>
+              </div>
+
+              <!-- 主信息 -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span :class="['text-xs px-2 py-0.5 rounded-md font-medium', getBadgeClass(task?.status)]">
+                    <span v-if="task?.status === 'RUNNING'" class="inline-flex items-center gap-1.5">
+                      <span class="pulse-dot inline-block"></span><span v-text="task.status"></span>
+                    </span>
+                    <span v-else v-text="task?.status"></span>
+                  </span>
+                  <span class="text-xs text-slate-600" v-text="'#' + task?.taskId"></span>
+                  <span class="text-xs text-slate-500" v-text="expandedTaskId === task?.taskId ? '收起' : '展开'"></span>
+                </div>
+                <p class="text-sm font-medium text-slate-200 truncate"
+                  v-text="(task?.metaInfo?.title) || task?.taskName || ''"></p>
+                <p class="text-xs text-slate-500 truncate mt-0.5" v-text="task?.targetUrl"></p>
+
+                <!-- 进度条 -->
+                <div v-if="task?.status === 'RUNNING' && task?.progress" class="mt-2.5 flex items-center gap-3">
+                  <div class="flex-1 h-1 bg-white/10 rounded-full overflow-hidden relative">
+                    <div
+                      class="absolute top-0 left-0 h-full bg-blue-500/80 rounded-full transition-all duration-300 ease-out shadow-[0_0_8px_rgba(59,130,246,0.6)]"
+                      :style="{ width: task.progress + '%' }"></div>
+                  </div>
+                  <span class="text-[10px] text-blue-400 font-mono w-8 text-right font-medium"
+                    v-text="task.progress + '%'"></span>
+                </div>
+              </div>
+
+              <div class="flex-shrink-0 text-right flex items-center justify-end gap-3 sm:block">
+                <div class="hidden sm:block">
+                  <div v-if="task?.metaInfo?.uploader" class="text-xs text-pearl mb-1" v-text="task.metaInfo.uploader">
+                  </div>
+                  <div v-if="task?.metaInfo?.duration" class="text-xs text-slate-500"
+                    v-text="formatDuration(task.metaInfo.duration)"></div>
+                  <div class="text-xs text-slate-600 mt-1" v-text="formatTime(task?.updatedAt || task?.createdAt)">
+                  </div>
+                </div>
+                <!-- 删除按钮 -->
+                <button @click.stop="deleteTask(task.taskId, $event)"
+                  class="p-2 sm:mt-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  title="删除任务">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- 行内展开详情（无弹层、无遮罩） -->
+            <div v-if="expandedTaskId === task?.taskId" class="glass px-6 py-4 border-t border-white/[0.06]">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                <div v-if="task?.metaInfo?.uploader" class="glass rounded-xl p-3">
+                  <div class="text-xs text-slate-500 mb-1">上传者</div>
+                  <div class="text-xs text-pearl font-medium truncate" v-text="task.metaInfo.uploader"></div>
+                </div>
+                <div v-if="task?.metaInfo?.duration" class="glass rounded-xl p-3">
+                  <div class="text-xs text-slate-500 mb-1">时长</div>
+                  <div class="text-xs text-pearl font-medium" v-text="formatDuration(task.metaInfo.duration)"></div>
+                </div>
+                <div class="glass rounded-xl p-3">
+                  <div class="text-xs text-slate-500 mb-1">节点</div>
+                  <div class="text-xs text-pearl font-medium truncate" v-text="task?.workerNode || '—'"></div>
+                </div>
+              </div>
+              <div class="mb-3">
+                <div class="text-xs text-slate-500 mb-1">目标 URL</div>
+                <a :href="task?.targetUrl" target="_blank" rel="noopener"
+                  class="text-xs text-blue-400 hover:text-blue-300 break-all" v-text="task?.targetUrl"></a>
+              </div>
+              <div v-if="task?.errorLog" class="mb-3">
+                <div class="text-xs text-slate-500 mb-1">错误日志</div>
+                <div
+                  class="glass rounded-xl px-4 py-3 text-xs text-red-400 font-mono break-all border border-red-500/20"
+                  v-text="task.errorLog"></div>
+              </div>
+
+              <!-- 失败任务重试 -->
+              <div v-if="task?.status === 'FAILED'"
+                class="mb-4 flex items-center gap-3 border-t border-white/5 pt-4 mt-2">
+                <button @click="retryTask(task)" :disabled="submitting"
+                  class="btn-primary px-4 py-2 rounded-xl text-xs flex items-center gap-2 disabled:opacity-50 border border-blue-500/30">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" stroke-linecap="round"
+                      stroke-linejoin="round" />
+                    <path d="M3 3v5h5" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  原样重铸 (重试)
+                </button>
+              </div>
+
+              <!-- 下游动作：直链与播放 -->
+              <div v-if="task?.status === 'SUCCESS' && task?.metaInfo?.filePath"
+                class="mb-4 flex items-center gap-3 border-t border-white/5 pt-4 mt-2">
+                <!-- 播放按钮已根据用户需求移除 -->
+                <a :href="`${API_BASE}/${task.taskId}/download`" target="_blank"
+                  class="btn-ghost px-4 py-2 rounded-xl text-xs text-slate-300 hover:text-blue-400 border border-white/10 flex items-center gap-2">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round"
+                      stroke-linejoin="round" />
+                  </svg>
+                  直链下载 (Bypass)
+                </a>
+              </div>
+
+              <div class="flex justify-between text-xs text-slate-600">
+                <span v-text="'创建于 ' + formatTime(task?.createdAt)"></span>
+                <span v-text="'更新于 ' + formatTime(task?.updatedAt)"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== 底部 ===== -->
+    <footer class="text-center py-6 text-xs text-slate-700">
+      <span>Nautilus Media Cloud &nbsp;·&nbsp; Powered by </span>
+      <span class="text-slate-600">ヨルシカ (Yorushika)</span>
+      <span> &nbsp;·&nbsp; 深海里，每一道光都值得被记录</span>
+    </footer>
+
+
+    <!-- ===== 创建任务模态框（必须在 #app 内，Vue 才能编译指令） ===== -->
+    <teleport to="body">
+      <transition name="fade">
+        <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay"
+          @click.self="closeCreateModal">
+          <div class="glass-strong rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-white/10 relative">
+            <!-- 模态头 -->
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-base font-semibold text-white">投递新任务</h3>
+                <p class="text-xs text-slate-500 mt-0.5">将 URL 投入深海，等待又三郎的回音</p>
+              </div>
+              <button type="button" @click.stop="closeCreateModal"
+                class="btn-ghost w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white cursor-pointer z-10">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- 表单 -->
+            <form @submit.prevent="createTask" class="space-y-4">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5 font-medium">任务名称</label>
+                <input v-model="form.taskName" type="text" placeholder="为这次潜行命名，比如：又三郎 4K MV 抓取"
+                  class="glass-input w-full px-4 py-3 rounded-xl text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5 font-medium">目标 URL</label>
+                <input v-model="form.targetUrl" type="url" placeholder="https://www.youtube.com/watch?v=..."
+                  class="glass-input w-full px-4 py-3 rounded-xl text-sm font-mono" />
+              </div>
+
+              <!-- 高级选项折叠面板 -->
+              <div class="border border-slate-700/50 rounded-xl overflow-hidden mt-2">
+                <button type="button" @click="showAdvanced = !showAdvanced"
+                  class="w-full px-4 py-2.5 bg-slate-800/50 flex items-center justify-between text-xs text-slate-300 hover:bg-slate-700/50 transition-colors">
+                  <span class="flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2">
+                      <path
+                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    高级选项
+                  </span>
+                  <svg class="w-3.5 h-3.5 transition-transform duration-300" :class="showAdvanced ? 'rotate-180' : ''"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+
+                <div v-show="showAdvanced" class="p-4 bg-slate-900/30 border-t border-slate-700/50">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="block text-xs font-medium text-slate-400 mb-1.5 flex justify-between">
+                        <span>提炼为 (Format)</span>
+                        <span class="text-[10px] text-blue-400/80 bg-blue-400/10 px-1.5 rounded">后端自适应提取</span>
+                      </label>
+                      <select v-model="form.format"
+                        class="glass-input w-full px-3 py-2 rounded-lg text-sm bg-slate-800/80 !opacity-100 text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50">
+                        <optgroup label="🎶 音频提取 (Audio)">
+                          <option value="mp3">高质量 MP3 (默认)</option>
+                          <option value="flac">无损 FLAC</option>
+                        </optgroup>
+                        <optgroup label="🎬 视频原画 (Video)">
+                          <option value="video1080p">1080P 超清</option>
+                          <option value="video4k">4K 极致</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="formError"
+                class="flex items-start gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mt-2">
+                <svg class="w-4 h-4 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4m0 4h.01" stroke-linecap="round" />
+                </svg>
+                <span v-text="formError"></span>
+              </div>
+              <div class="flex gap-3 pt-2">
+                <button type="button" @click="closeCreateModal"
+                  class="btn-ghost flex-1 py-3 rounded-xl text-sm text-slate-400">
+                  取消
+                </button>
+                <button type="submit" :disabled="submitting"
+                  class="btn-primary flex-1 py-3 rounded-xl text-sm text-white font-medium flex items-center justify-center gap-2">
+                  <div v-if="submitting" class="w-4 h-4 spinner"></div>
+                  <span v-text="submitting ? '投递中...' : '投入深海'"></span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </transition>
+    </teleport>
+
+    <!-- ==================== § Auth Modal ==================== -->
+    <transition name="fade">
+      <div v-if="showAuthModal" class="fixed inset-0 z-[100] flex items-center justify-center">
+        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-md"></div>
+        <div
+          class="relative bg-slate-800/80 border border-slate-700/50 p-8 rounded-2xl w-full max-w-sm shadow-2xl backdrop-blur-xl transform transition-all duration-300">
+          <div class="text-center mb-6">
+            <div
+              class="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+              <svg class="w-8 h-8 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+                <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <h3 class="text-xl font-bold text-slate-100">身份验证</h3>
+            <p class="text-sm text-slate-400 mt-2">云端休眠中，请出示访问口令</p>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <input type="password" v-model="authTokenInput" @keyup.enter="verifyToken"
+                class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all text-center tracking-widest"
+                placeholder="请输入 Token" autofocus>
+            </div>
+            <div v-if="authError" class="text-red-400 text-xs text-center animate-pulse">
+              {{ authError }}
+            </div>
+            <button type="button" @click="verifyToken"
+              class="w-full bg-blue-500 hover:bg-blue-400 text-white font-medium py-3 rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 active:transform active:scale-95">
+              接入 Nautilus 网络
+            </button>
+          </div>
+        </div>
+      </div>
+  </div>
+  </transition>
+
+
+
+  <!-- ===== Toast 通知 ===== -->
+  <teleport to="body">
+    <div class="fixed top-20 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+      <transition-group name="toast">
+        <div v-for="toast in toasts" :key="toast.id" :class="['glass-strong rounded-xl px-4 py-3 shadow-2xl border flex items-start gap-3 pointer-events-auto max-w-sm',
+                     toast.type === 'success' ? 'border-emerald-500/30' :
+                     toast.type === 'error'   ? 'border-red-500/30' :
+                                                'border-blue-500/30']">
+          <span class="text-base flex-shrink-0 mt-0.5"
+            v-text="toast.type === 'success' ? '🌊' : toast.type === 'error' ? '🌸' : '🌙'"></span>
+          <p class="text-xs text-slate-300 leading-relaxed" v-text="toast.message"></p>
+        </div>
+      </transition-group>
+    </div>
+  </teleport>
+
+  </div><!-- /#app -->
+
+
+  <style>
+    .fade-enter-active,
+    .fade-leave-active {
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .fade-enter-from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+
+    .fade-leave-to {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+
+    .toast-enter-active {
+      animation: toastIn 0.35s ease forwards;
+    }
+
+    .toast-leave-active {
+      animation: toastOut 0.3s ease forwards;
+      position: absolute;
+    }
+
+    .toast-move {
+      transition: transform 0.3s ease;
+    }
+  </style>
+
+
+  <script>
+    const { createApp, ref, computed, onMounted, onUnmounted } = Vue
+
+    const API_BASE = 'http://localhost:8080/api/v1/tasks'
+
+    const app = createApp({
+      setup() {
+
+        // ===================================================
+        // ===== § 1  核心响应式状态 (Reactive State) =====
+        // ===================================================
+        const tasks = ref([])
+        const loading = ref(false)
+        const apiOnline = ref(false)
+        const autoRefresh = ref(true)
+        const activeFilter = ref('ALL')
+        const showCreateModal = ref(false)
+        const showAdvanced = ref(false)
+        const expandedTaskId = ref(null)  // 当前展开详情的任务 ID
+        const toasts = ref([])
+        let pollTimer = null
+
+        // 搜索与批量操作
+        const searchQuery = ref('')       // 搜索关键词
+        const selectedIds = ref(new Set()) // 被勾选的任务 ID 集合
+        const batchDeleting = ref(false)  // 批量删除进行中
+
+        // 创建任务表单
+        const form = ref({ taskName: '', targetUrl: '', format: 'mp3' })
+        const formError = ref('')
+        const submitting = ref(false)
+
+        // ===== 筛选器 =====
+        const filters = [
+          { label: '全部', value: 'ALL' },
+          { label: '等待中', value: 'PENDING' },
+          { label: '执行中', value: 'RUNNING' },
+          { label: '已完成', value: 'SUCCESS' },
+          { label: '已失败', value: 'FAILED' },
+        ]
+
+        // ===================================================
+        // ===== § 2  计算属性 (Computed) =====
+        // ===================================================
+        const filteredTasks = computed(() => {
+          let list = tasks.value
+          if (activeFilter.value !== 'ALL') {
+            list = list.filter(t => t.status === activeFilter.value)
+          }
+          const q = searchQuery.value.trim().toLowerCase()
+          if (q) {
+            list = list.filter(t =>
+              (t.taskName || '').toLowerCase().includes(q) ||
+              (t.targetUrl || '').toLowerCase().includes(q) ||
+              (t.metaInfo?.title || '').toLowerCase().includes(q) ||
+              (t.metaInfo?.uploader || '').toLowerCase().includes(q)
+            )
+          }
+          return list
+        })
+
+        const allSelected = computed(() =>
+          filteredTasks.value.length > 0 &&
+          filteredTasks.value.every(t => selectedIds.value.has(t.taskId))
+        )
+
+        // ===== 统计卡片 (动态从后端获取) =====
+        const dashboardData = ref({
+          totalTasks: 0,
+          pendingTasks: 0,
+          runningTasks: 0,
+          successTasks: 0,
+          failedTasks: 0,
+          todayTrafficBytes: 0,
+          onlineWorkers: 0
+        })
+
+        // ===== 鉴权相关的状态 =====
+        const showAuthModal = ref(false)
+        const authTokenInput = ref('')
+        const authToken = ref(localStorage.getItem('nautilus_token') || '')
+        const authError = ref('')
+
+        const stats = computed(() => {
+          const d = dashboardData.value
+          // 转换下行流量
+          let trafficStr = '0 B'
+          if (d.todayTrafficBytes > 0) {
+            const kb = d.todayTrafficBytes / 1024
+            if (kb > 1024) {
+              trafficStr = (kb / 1024).toFixed(1) + ' MB'
+            } else {
+              trafficStr = kb.toFixed(1) + ' KB'
+            }
+          }
+
+          return [
+            { label: '今日下行流量', count: trafficStr, icon: '🌊', iconBg: 'bg-blue-500/10', badgeClass: 'bg-blue-500/10 text-blue-400', trend: '日累计' },
+            { label: '在线 Worker', count: d.onlineWorkers, icon: '⚡', iconBg: 'bg-emerald-500/10', badgeClass: 'bg-emerald-500/10 text-emerald-400', trend: '健康' },
+            { label: '等待与执行中', count: d.pendingTasks + d.runningTasks, icon: '⏳', iconBg: 'bg-amber-500/10', badgeClass: 'bg-amber-500/10 text-amber-400', trend: '阻塞中' },
+            { label: '执行失败', count: d.failedTasks, icon: '🌸', iconBg: 'bg-red-500/10', badgeClass: 'bg-red-500/10 text-red-400', trend: '异常' },
+          ]
+        })
+
+        // ===== API 调用 =====
+        async function fetchTasks() {
+          if (!authToken.value) {
+            showAuthModal.value = true
+            return
+          }
+          loading.value = true
+          try {
+            // 使用 MyBatis-Plus 的 BaseMapper 提供的 selectList 等接口
+            // 这里通过 health 检查在线状态，任务列表通过 pending 接口轮询
+            const res = await fetch(`${API_BASE}/health`, getAuthOptions())
+            if (res.status === 401) {
+              handleUnauthorized()
+              return
+            }
+            if (res.ok) {
+              apiOnline.value = true
+            }
+          } catch {
+            apiOnline.value = false
+          }
+
+          // 拉取所有任务（通过多状态轮询拼合）
+          try {
+            const res = await fetch(`${API_BASE}/list`, getAuthOptions())
+            if (res.status === 401) {
+              handleUnauthorized()
+              return
+            }
+            if (res.ok) {
+              const json = await res.json()
+              if (json.code === 200 && Array.isArray(json.data)) {
+                tasks.value = json.data
+              }
+            }
+          } catch {
+            // 接口不存在时静默处理，保留现有数据
+          } finally {
+            loading.value = false
+          }
+        }
+
+        function closeCreateModal() {
+          showCreateModal.value = false
+          showAdvanced.value = false
+          submitting.value = false
+          formError.value = ''
+        }
+
+        async function createTask() {
+          formError.value = ''
+          if (!form.value.taskName.trim()) {
+            formError.value = '思想犯 - 任务名称不能为空，请为这次潜行命名'
+            return
+          }
+          if (!form.value.targetUrl.trim()) {
+            formError.value = '思想犯 - 目标 URL 不能为空，深海需要一个坐标'
+            return
+          }
+          try {
+            new URL(form.value.targetUrl)
+          } catch {
+            formError.value = '思想犯 - URL 格式不正确，请检查链接'
+            return
+          }
+
+          submitting.value = true
+          try {
+            // 用 Promise.race 给整个请求（含 json 解析）设置硬超时，防止 res.json() 死等
+            const fetchWithTimeout = new Promise((resolve, reject) => {
+              const controller = new AbortController()
+              const tid = setTimeout(() => {
+                controller.abort()
+                reject(new Error('TIMEOUT'))
+              }, 15000)
+
+              const reqOpts = getAuthOptions({
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  taskName: form.value.taskName.trim(),
+                  targetUrl: form.value.targetUrl.trim(),
+                  metaInfo: {
+                    format: form.value.format
+                  }
+                }),
+                signal: controller.signal,
+              })
+
+              fetch(API_BASE, reqOpts).then(async res => {
+                clearTimeout(tid)
+                if (res.status === 401) {
+                  reject(new Error('UNAUTHORIZED'))
+                  return
+                }
+                if (!res.ok) { reject(new Error(`HTTP_${res.status}`)); return }
+                try { resolve(await res.json()) }
+                catch { reject(new Error('JSON_PARSE_PARSE_ERROR')) }
+              }).catch(err => {
+                clearTimeout(tid)
+                reject(err)
+              })
+            })
+
+            const json = await fetchWithTimeout
+            if (json.code === 200) {
+              showToast('success', '夜行 - 任务已投入深海，又三郎正在嗅探媒体流...')
+              closeCreateModal()
+              form.value = { taskName: '', targetUrl: '', format: 'mp3' }
+              if (json.data) {
+                // 防止 SSE 已经推过来了，导致重复
+                const idx = tasks.value.findIndex(t => t.taskId === json.data.taskId)
+                if (idx === -1) {
+                  tasks.value.unshift(json.data)
+                } else {
+                  tasks.value[idx] = json.data
+                }
+              }
+            } else {
+              formError.value = json.msg || '春泥棒 - 投递失败，花瓣散落'
+            }
+          } catch (e) {
+            if (e.message === 'UNAUTHORIZED') {
+              closeCreateModal()
+              handleUnauthorized()
+            } else if (e.message === 'TIMEOUT' || e.name === 'AbortError') {
+              formError.value = '春泥棒 - 请求超时，请检查调度中心是否启动（端口 8080）'
+            } else if (e.message && e.message.startsWith('HTTP_')) {
+              formError.value = `春泥棒 - 服务端错误 ${e.message.replace('HTTP_', '')}，请检查后端日志`
+            } else if (e.message === 'JSON_PARSE_ERROR') {
+              formError.value = '春泥棒 - 服务端返回了非法响应，请检查后端日志'
+            } else {
+              formError.value = '春泥棒 - 无法连接调度中心，请检查后端服务（端口 8080）'
+            }
+          } finally {
+            submitting.value = false
+          }
+        }
+
+        async function retryTask(task) {
+          if (submitting.value) return
+          submitting.value = true
+
+          const payload = {
+            taskName: task.taskName + ' (重试)',
+            targetUrl: task.targetUrl,
+            metaInfo: {
+              ...(task.metaInfo || {}),
+              format: task.metaInfo?.format || 'mp3'
+            }
+          }
+
+          try {
+            const res = await fetch(API_BASE, getAuthOptions({
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }))
+
+            if (res.status === 401) {
+              handleUnauthorized()
+              return
+            }
+
+            if (res.ok) {
+              const json = await res.json()
+              if (json.code === 200) {
+                showToast('success', '重试任务已投入深海')
+                // 尝试删除旧任务（静默失败）
+                try {
+                  await fetch(`${API_BASE}/${task.taskId}`, getAuthOptions({ method: 'DELETE' }))
+                } catch (e) { }
+                // 刷新
+                await fetchTasks()
+                expandedTaskId.value = null
+              } else {
+                showToast('error', json.msg || '重试失败')
+              }
+            } else {
+              showToast('error', '调度中心连接异常')
+            }
+          } catch (e) {
+            showToast('error', '调度中心连接异常')
+          } finally {
+            submitting.value = false
+          }
+        }
+
+
+        async function deleteTask(taskId, event) {
+          if (event) event.stopPropagation()
+
+          if (!confirm('思想犯 - 确认要将这个任务沉入海底（永久删除）吗？')) return
+
+          try {
+            const res = await fetch(`${API_BASE}/${taskId}`, getAuthOptions({
+              method: 'DELETE'
+            }))
+            if (res.status === 401) {
+              handleUnauthorized()
+              return
+            }
+            if (res.ok) {
+              const json = await res.json()
+              if (json.code === 200) {
+                showToast('success', '夜行 - 记录已抹除，不留痕迹')
+                tasks.value = tasks.value.filter(t => t.taskId !== taskId)
+                if (expandedTaskId.value === taskId) expandedTaskId.value = null
+              } else {
+                showToast('error', json.msg || '春泥棒 - 清理失败')
+              }
+            } else {
+              showToast('error', `春泥棒 - 服务端异常 HTTP ${res.status}`)
+            }
+          } catch (e) {
+            showToast('error', '春泥棒 - 网络异常，无法连接调度中心')
+          }
+        }
+
+        // ===================================================
+        // ===== § 4  服务器单向推送 (SSE) =====
+        // ===================================================
+        let eventSource = null
+
+        function connectSSE() {
+          if (eventSource) return
+          if (!authToken.value) return // 没有 token 不连接 SSE
+
+          eventSource = new EventSource(`${API_BASE}/stream?token=${authToken.value}`)
+
+          eventSource.onopen = () => {
+            apiOnline.value = true
+            console.log('SSE 连接已建立')
+          }
+
+          eventSource.addEventListener('task-update', (event) => {
+            try {
+              const fresh = JSON.parse(event.data)
+              const idx = tasks.value.findIndex(t => t.taskId === fresh.taskId)
+
+              if (idx !== -1) {
+                const local = tasks.value[idx]
+                tasks.value[idx] = fresh
+                // 状态变化时弹 Toast
+                if (local.status !== fresh.status) {
+                  if (fresh.status === 'SUCCESS') {
+                    showToast('success', `夜明けと蛍 - 「${fresh.metaInfo?.title || fresh.taskName}」提取成功，文件已落盘`)
+                  } else if (fresh.status === 'FAILED') {
+                    showToast('error', `春泥棒 - 「${fresh.taskName}」执行失败，花瓣散落`)
+                  }
+                }
+              } else {
+                // 如果是新任务，加到列表最前面
+                tasks.value.unshift(fresh)
+              }
+            } catch (err) {
+              console.error('SSE 消息解析失败', err)
+            }
+          })
+
+          eventSource.onerror = (err) => {
+            console.error('SSE 连接异常', err)
+            apiOnline.value = false
+            eventSource.close()
+            eventSource = null
+
+            // 如果处于开启状态，3 秒后自动重连
+            if (autoRefresh.value) {
+              setTimeout(connectSSE, 3000)
+            }
+          }
+        }
+
+        function disconnectSSE() {
+          if (eventSource) {
+            eventSource.close()
+            eventSource = null
+            apiOnline.value = false
+          }
+        }
+
+        function toggleAutoRefresh() {
+          autoRefresh.value = !autoRefresh.value
+          autoRefresh.value ? connectSSE() : disconnectSSE()
+          showToast('info', autoRefresh.value ? '夜行 - 实时推送已开启' : '思想犯 - 推送已断开，与深海失去连接')
+        }
+
+        // ===================================================
+        // ===== § 5  选择 & 批量删除 (Selection & Batch Delete) =====
+        // ===================================================
+        function toggleSelect(taskId) {
+          const s = new Set(selectedIds.value)
+          s.has(taskId) ? s.delete(taskId) : s.add(taskId)
+          selectedIds.value = s
+        }
+
+        function toggleSelectAll() {
+          if (allSelected.value) {
+            // 取消全选：从集合中移除当前视图下的所有 ID
+            const s = new Set(selectedIds.value)
+            filteredTasks.value.forEach(t => s.delete(t.taskId))
+            selectedIds.value = s
+          } else {
+            // 全选当前视图
+            const s = new Set(selectedIds.value)
+            filteredTasks.value.forEach(t => s.add(t.taskId))
+            selectedIds.value = s
+          }
+        }
+
+        async function batchDelete() {
+          if (selectedIds.value.size === 0) return
+          const count = selectedIds.value.size
+          if (!confirm(`思想犯 - 确认要将这 ${count} 个任务沉入海底（永久删除）吗？`)) return
+
+          batchDeleting.value = true
+          const ids = Array.from(selectedIds.value)
+          let successCount = 0
+          let failCount = 0
+
+          await Promise.allSettled(ids.map(async id => {
+            try {
+              const res = await fetch(`${API_BASE}/${id}`, getAuthOptions({ method: 'DELETE' }))
+              if (res.status === 401) {
+                handleUnauthorized()
+                return // 不计入成功或失败，因为是鉴权问题
+              }
+              if (res.ok) {
+                const json = await res.json()
+                json.code === 200 ? successCount++ : failCount++
+              } else {
+                failCount++
+              }
+            } catch {
+              failCount++
+            }
+          }))
+
+          // 从前端列表里移除成功删除的条目（一次 diff 操作）
+          const deletedSet = new Set(ids)
+          tasks.value = tasks.value.filter(t => {
+            if (!deletedSet.has(t.taskId)) return true
+            return false // 删掉（不管成功失败都从选中里移除）
+          })
+          selectedIds.value = new Set()
+          batchDeleting.value = false
+
+          if (failCount === 0) {
+            showToast('success', `夜行 - 成功清理 ${successCount} 条记录，深海归于平静`)
+          } else {
+            showToast('error', `春泥棒 - ${successCount} 条成功，${failCount} 条失败`)
+          }
+        }
+
+        async function clearFailed() {
+          const failedIds = tasks.value.filter(t => t.status === 'FAILED').map(t => t.taskId)
+          if (failedIds.length === 0) {
+            showToast('info', '又三郎 - 没有失败的任务，深海很干净')
+            return
+          }
+          if (!confirm(`思想犯 - 确认一键清空 ${failedIds.length} 个 FAILED 任务吗？`)) return
+          // 直接借用 batchDelete 逻辑
+          selectedIds.value = new Set(failedIds)
+          await batchDelete()
+        }
+
+        // ===================================================
+        // ===== § 6  工具函数 (Utilities) =====
+        // ===================================================
+
+
+
+        function getBadgeClass(status) {
+          const map = {
+            PENDING: 'badge-pending',
+            RUNNING: 'badge-running',
+            SUCCESS: 'badge-success',
+            FAILED: 'badge-failed',
+          }
+          return map[status] || 'badge-pending'
+        }
+
+        function formatDuration(seconds) {
+          if (!seconds) return '—'
+          const m = Math.floor(seconds / 60)
+          const s = Math.floor(seconds % 60)
+          return `${m}:${String(s).padStart(2, '0')}`
+        }
+
+        function formatTime(dateStr) {
+          if (!dateStr) return '—'
+          try {
+            const d = new Date(dateStr)
+            const now = new Date()
+            const diff = now - d
+            if (diff < 60000) return '刚刚'
+            if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+            return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          } catch { return dateStr }
+        }
+
+        function toggleExpand(taskId) {
+          expandedTaskId.value = expandedTaskId.value === taskId ? null : taskId
+        }
+
+        let toastId = 0
+        function showToast(type, message) {
+          const id = ++toastId
+          toasts.value.push({ id, type, message })
+          setTimeout(() => {
+            toasts.value = toasts.value.filter(t => t.id !== id)
+          }, 4500)
+        }
+
+        // ===== 键盘 Esc 关闭「投递任务」弹层 =====
+        function onKeydown(e) {
+          if (e.key === 'Escape' && showCreateModal.value) closeCreateModal()
+          if (e.key === 'Escape' && showAuthModal.value) handleUnauthorized() // Esc 关闭鉴权弹窗
+        }
+
+        // ===================================================
+        // ===== § 3  鉴权及请求封装 =====
+        // ===================================================
+
+        // 校验 Token 格式并保存
+        async function verifyToken() {
+          const t = authTokenInput.value.trim()
+          if (!t) {
+            authError.value = '口令不能为空'
+            return
+          }
+          authToken.value = t
+          localStorage.setItem('nautilus_token', t)
+          authError.value = ''
+          showAuthModal.value = false
+
+          // 重新拉取数据
+          await fetchTasks()
+          await fetchStats()
+          connectSSE() // 重新连接 SSE
+        }
+
+        // 处理 401 拦截
+        function handleUnauthorized(errMessage) {
+          showAuthModal.value = true
+          authError.value = errMessage || '口令已过期或无效，请重新验证'
+          authToken.value = ''
+          localStorage.removeItem('nautilus_token')
+          if (eventSource) disconnectSSE()
+        }
+
+        // 统一构建带有认证头的 fetch options
+        function getAuthOptions(options = {}) {
+          const headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${authToken.value}`
+          }
+          if (options.method && options.method !== 'GET' && !options.body) {
+            // 啥也不做
+          }
+          return { ...options, headers }
+        }
+
+        // ===================================================
+        // ===== § 4  网络请求与拉取数据 =====
+        // ===================================================
+        async function fetchStats() {
+          if (!authToken.value) return // 未通过口令时不请求大屏数据
+          try {
+            const res = await fetch(`${API_BASE}/stats`, getAuthOptions())
+            if (res.status === 401) {
+              handleUnauthorized()
+              return
+            }
+            if (res.ok) {
+              const json = await res.json()
+              if (json.code === 200 && json.data) {
+                dashboardData.value = json.data
+              }
+            }
+          } catch (e) {
+            // 静默失败
+          }
+        }
+
+        let statsTimer = null
+
+        // ===== 生命周期 =====
+        onMounted(async () => {
+          window.addEventListener('keydown', onKeydown)
+          if (!authToken.value) {
+            showAuthModal.value = true
+          } else {
+            await fetchTasks()
+            await fetchStats()
+            connectSSE()
+          }
+          // 哪怕一开始没 token，只要过关了也会开定时器拉大屏，但拉大屏方法内置了 authToken 防护
+          statsTimer = setInterval(fetchStats, 5000)
+        })
+        onUnmounted(() => {
+          window.removeEventListener('keydown', onKeydown)
+          disconnectSSE()
+          if (statsTimer) clearInterval(statsTimer)
+        })
+
+        return {
+          API_BASE,
+          // ─ State ─
+          tasks, loading, apiOnline, autoRefresh, activeFilter,
+          showCreateModal, showAdvanced, expandedTaskId, toasts,
+          form, formError, submitting,
+          searchQuery, selectedIds, batchDeleting, dashboardData,
+          showAuthModal, authTokenInput, authError,
+          // ─ Computed ─
+          filters, filteredTasks, stats, allSelected,
+          // ─ Methods ─
+          verifyToken, fetchTasks, fetchStats, createTask, retryTask, closeCreateModal, toggleAutoRefresh,
+          deleteTask, toggleSelect, toggleSelectAll, batchDelete, clearFailed,
+          getBadgeClass, formatDuration, formatTime, toggleExpand
+        }
+      }
+    })
+
+    // 在 mount 之前设置全局错误处理，防止 Vue 渲染错误使 UI 假死
+    app.config.errorHandler = (err, _instance, info) => {
+      console.error('[Nautilus] Vue render error in', info, err)
+    }
+
+    app.mount('#app')
+  </script>
+
+</body>
+
+</html>

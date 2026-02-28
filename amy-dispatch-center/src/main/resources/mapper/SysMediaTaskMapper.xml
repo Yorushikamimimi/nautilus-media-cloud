@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nautilus.dispatch.mapper.SysMediaTaskMapper">
+
+    <!-- 结果映射 - 显式声明 JSONB 字段的类型处理器 -->
+    <resultMap id="BaseResultMap" type="com.nautilus.dispatch.domain.entity.SysMediaTask">
+        <id column="task_id" property="taskId" jdbcType="BIGINT"/>
+        <result column="task_name" property="taskName" jdbcType="VARCHAR"/>
+        <result column="target_url" property="targetUrl" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="worker_node" property="workerNode" jdbcType="VARCHAR"/>
+        <result column="meta_info" property="metaInfo" 
+                typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler" 
+                jdbcType="OTHER" javaType="java.util.Map"/>
+        <result column="error_log" property="errorLog" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!--
+        选取一条待处理任务并加行锁 (FOR UPDATE SKIP LOCKED)
+        与 updateTaskToRunning 在同一事务内调用,避免 MyBatis/JDBC 对 UPDATE RETURNING 的兼容性问题
+    -->
+    <select id="selectOnePendingForUpdate" resultMap="BaseResultMap">
+        SELECT task_id, task_name, target_url, status, worker_node, meta_info, error_log, created_at, updated_at
+        FROM sys_media_task
+        WHERE status = 'PENDING'
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+    </select>
+
+    <!-- 将指定任务更新为 RUNNING 并绑定工作节点 -->
+    <update id="updateTaskToRunning">
+        UPDATE sys_media_task
+        SET status = 'RUNNING',
+            worker_node = #{workerNode},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE task_id = #{taskId}
+    </update>
+
+    <!--
+        更新任务状态 - 用于工作节点回报执行结果
+        
+        支持:
+        1. 成功完成: status = SUCCESS, 可回填 meta_info (JSONB)
+        2. 失败: status = FAILED, error_log = 具体错误信息
+    -->
+    <update id="updateTaskStatus">
+        UPDATE sys_media_task
+        SET status = #{status},
+            <if test="errorLog != null and errorLog != ''">
+            error_log = #{errorLog},
+            </if>
+            <if test="metaInfo != null">
+            meta_info = #{metaInfo, typeHandler=com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler},
+            </if>
+            updated_at = CURRENT_TIMESTAMP
+        WHERE task_id = #{taskId}
+    </update>
+
+</mapper>

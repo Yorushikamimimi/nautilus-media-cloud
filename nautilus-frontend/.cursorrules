@@ -1,0 +1,6 @@
+# UI/UX & Frontend Development Rules
+- 强制使用现代技术栈：纯 HTML5 + 引入 Vue 3 (CDN) + Tailwind CSS (CDN)。无需繁琐的 Node.js 工程化打包，主打轻量、优雅、即插即用。
+- 视觉风格 (Aesthetics)：全面采用「Glassmorphism (玻璃拟态)」设计语言。大量使用毛玻璃背景 (`backdrop-blur`)、半透明纯白面板 (`bg-white/10`) 和极其细腻的阴影 (`shadow-2xl`)。
+- 主题色调：以深空蓝和清冷的蓝灰色为主，契合《鹦鹉螺 (Nautilus)》的深海意象。
+- 交互动效：所有的 Hover 状态、按钮点击、加载中 (Loading) 状态必须有平滑的 CSS 过渡动画 (`transition-all duration-300`)。
+- 文案约束：保持一贯的 Yorushika (ヨルシカ) 歌词风格，UI 提示语要带有一点诗意和物哀美学。

@@ -1,0 +1,20 @@
+# Nautilus Media Cloud - Python Worker 依赖清单
+# Python 版本: 3.10+
+
+# 核心异步 HTTP 客户端
+httpx==0.27.0
+
+# 异步编程核心库 (Python 自带,此处标注版本)
+# asyncio (内置)
+
+# 流媒体提取工具
+yt-dlp==2024.8.6
+
+# 日志增强 (可选,用于彩色输出)
+colorlog==6.8.2
+
+# 类型检查工具 (开发依赖)
+mypy==1.11.0
+
+# 代码格式化 (开发依赖)
+black==24.8.0

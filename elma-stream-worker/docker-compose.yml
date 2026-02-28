@@ -1,0 +1,66 @@
+# Elma Stream Worker - Docker Compose 配置
+# 用于快速启动多个 Worker 节点
+
+version: '3.8'
+
+services:
+  # Worker 节点 1
+  elma-worker-01:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elma-worker-01
+    environment:
+      - WORKER_ID=Elma-Docker-Node-01
+      - BASE_URL=http://host.docker.internal:8080/api/v1/tasks
+      - POLL_INTERVAL=3
+    restart: unless-stopped
+    networks:
+      - nautilus-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Worker 节点 2
+  elma-worker-02:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elma-worker-02
+    environment:
+      - WORKER_ID=Elma-Docker-Node-02
+      - BASE_URL=http://host.docker.internal:8080/api/v1/tasks
+      - POLL_INTERVAL=3
+    restart: unless-stopped
+    networks:
+      - nautilus-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Worker 节点 3
+  elma-worker-03:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elma-worker-03
+    environment:
+      - WORKER_ID=Elma-Docker-Node-03
+      - BASE_URL=http://host.docker.internal:8080/api/v1/tasks
+      - POLL_INTERVAL=3
+    restart: unless-stopped
+    networks:
+      - nautilus-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  nautilus-network:
+    driver: bridge

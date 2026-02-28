@@ -1,0 +1,78 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# 调度中心 API 鉴权（Worker/前端需携带相同 Token；请设置环境变量 NAUTILUS_AUTH_TOKEN 或修改默认值）
+nautilus:
+  auth:
+    token: ${NAUTILUS_AUTH_TOKEN:change-me}
+
+spring:
+  application:
+    name: amy-dispatch-center
+  
+  # PostgreSQL 数据源配置（请设置环境变量 DB_PASSWORD 或在此处替换为本地密码，勿提交真实密码）
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/nautilus_dispatch?stringtype=unspecified
+    username: postgres
+    password: ${DB_PASSWORD:your_postgres_password}
+    hikari:
+      # 连接池配置
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-test-query: SELECT 1
+
+  # Jackson JSON 配置
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  # Mapper XML 文件路径
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  
+  # 类型处理器包路径 (用于 JSONB 映射)
+  type-handlers-package: com.baomidou.mybatisplus.extension.handlers
+  
+  # 全局配置
+  global-config:
+    # 关闭 Banner
+    banner: false
+    db-config:
+      # 主键类型: AUTO 数据库自增
+      id-type: auto
+      # 逻辑删除字段
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  
+  # MyBatis 原生配置
+  configuration:
+    # 下划线转驼峰
+    map-underscore-to-camel-case: true
+    # 开启缓存
+    cache-enabled: true
+    # 打印 SQL (开发环境)
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # JDBC 类型配置 (支持 JSONB)
+    jdbc-type-for-null: 'null'
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.nautilus.dispatch: DEBUG
+    com.nautilus.dispatch.mapper: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"

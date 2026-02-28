@@ -1,0 +1,52 @@
+# ==================== Java / Maven ====================
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.war
+*.class
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+*.egg
+elma-stream-worker/config.py
+elma-stream-worker/*.local.py
+elma-stream-worker/downloads/
+elma-stream-worker/cookies.txt
+*.log
+elma-stream-worker/logs/
+
+# ==================== IDE / OS ====================
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==================== 本地配置（勿提交敏感信息） ====================
+application-local.yml
+*.local.yml
+.env
+.env.local
+
+# ==================== 其他 ====================
+*.part
+*.ytdl
+*.temp
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
