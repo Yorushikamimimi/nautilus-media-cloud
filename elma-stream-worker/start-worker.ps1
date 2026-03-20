@@ -3,7 +3,7 @@
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "🌙 Elma Stream Worker 启动器" -ForegroundColor Cyan
-Write-Host "   Nautilus Media Cloud - Python Data Plane" -ForegroundColor Cyan
+Write-Host "   Nautilus - Python Worker（数据面）" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 

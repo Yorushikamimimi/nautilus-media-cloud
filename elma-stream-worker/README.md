@@ -2,7 +2,7 @@
 
 ## 🌙 项目简介
 
-Nautilus Media Cloud 的 Python 异步工作节点,负责从 Java 调度中心拉取任务并执行流媒体提取。
+Nautilus 任务调度示例的 Python Worker：从 Java 控制面拉取任务并执行媒体提取（yt-dlp）。
 
 **Powered by Yorushika (ヨルシカ) & asyncio** 🎵
 

@@ -3,29 +3,36 @@ package com.nautilus.dispatch.controller;
 import com.nautilus.common.core.domain.AjaxResult;
 import com.nautilus.common.exception.ServiceException;
 import com.nautilus.dispatch.domain.entity.SysMediaTask;
-import com.nautilus.dispatch.service.ISysMediaTaskService;
 import com.nautilus.dispatch.service.ISseService;
+import com.nautilus.dispatch.service.ISysMediaTaskService;
 import com.nautilus.dispatch.service.WorkerRegistry;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.File;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * 媒体任务控制器
- * 提供任务拉取与状态回报的 REST API
- *
- * @author Nautilus Media Cloud
- */
 @Slf4j
 @Validated
 @RestController
@@ -36,142 +43,88 @@ public class MediaTaskController {
     private final ISysMediaTaskService taskService;
     private final ISseService sseService;
     private final WorkerRegistry workerRegistry;
+    private final JdbcTemplate jdbcTemplate;
 
-    /**
-     * SSE 任务状态实时流
-     * GET /api/v1/tasks/stream
-     */
     @GetMapping(value = "/stream", produces = "text/event-stream")
     public SseEmitter streamTasks() {
         String clientId = UUID.randomUUID().toString();
         return sseService.createConnect(clientId);
     }
 
-    /**
-     * 拉取待处理任务
-     * 
-     * GET /api/v1/tasks/pending?workerNode=worker-node-01
-     *
-     * 响应码:
-     * - 200: 成功拉取到任务
-     * - 204: 当前无可用任务
-     * - 500: 服务器内部错误
-     *
-     * @param workerNode 工作节点标识
-     * @return AjaxResult 封装的任务信息
-     */
     @GetMapping("/pending")
-    public AjaxResult pullTask(@RequestParam(name = "workerNode") @NotBlank(message = "工作节点标识不能为空") String workerNode) {
+    public AjaxResult pullTask(@RequestParam(name = "workerNode") @NotBlank(message = "workerNode cannot be blank") String workerNode) {
         try {
-            // 记录节点心跳
             workerRegistry.heartbeat(workerNode);
-
             SysMediaTask task = taskService.pullPendingTask(workerNode);
-
             if (task == null) {
-                // 无可用任务,返回 204 警告状态
-                return AjaxResult.noContent("思想犯 - 当前无待处理任务");
+                return AjaxResult.noContent("No pending task");
             }
-
-            // 成功拉取任务
-            return AjaxResult.success("夜行 - 任务拉取成功", task);
-
+            return AjaxResult.success("Task pulled", task);
         } catch (ServiceException e) {
-            log.error("思想犯 - 任务拉取业务异常: {}", e.getMessage());
+            log.error("Pull task business error: {}", e.getMessage());
             return AjaxResult.error(e.getMessage());
         } catch (Exception e) {
-            log.error("思想犯 - 任务拉取系统异常: {}", e.getMessage(), e);
-            return AjaxResult.error("思想犯 - 系统异常,请稍后重试");
+            log.error("Pull task system error", e);
+            return AjaxResult.error("Pull task failed");
         }
     }
 
-    /**
-     * 回报任务状态
-     *
-     * PUT /api/v1/tasks/{taskId}/status
-     *
-     * 请求体示例:
-     * {
-     * "status": "SUCCESS",
-     * "errorLog": "春泥棒 - 网络超时", // 可选,仅失败时需要
-     * "metaInfo": { "title": "...", "duration": 123, "uploader": "...",
-     * "thumbnail": "..." } // 可选,成功时 Worker 回填
-     * }
-     *
-     * @param taskId      任务ID
-     * @param requestBody 请求体,包含 status、errorLog、metaInfo(可选)
-     * @return AjaxResult 封装的更新结果
-     */
     @PutMapping("/{taskId}/status")
     public AjaxResult reportStatus(
-            @PathVariable @NotNull(message = "任务ID不能为空") Long taskId,
+            @PathVariable @NotNull(message = "taskId cannot be null") Long taskId,
             @RequestBody Map<String, Object> requestBody) {
 
         try {
             String status = requestBody.get("status") != null ? requestBody.get("status").toString() : null;
             String errorLog = requestBody.get("errorLog") != null ? requestBody.get("errorLog").toString() : null;
             String progress = requestBody.get("progress") != null ? requestBody.get("progress").toString() : null;
+
             @SuppressWarnings("unchecked")
             Map<String, Object> metaInfo = requestBody.get("metaInfo") instanceof Map
                     ? (Map<String, Object>) requestBody.get("metaInfo")
                     : null;
 
             if (status == null || status.trim().isEmpty()) {
-                return AjaxResult.error("思想犯 - 任务状态不能为空");
+                return AjaxResult.error("status cannot be blank");
             }
-
             if (!SysMediaTask.TaskStatus.SUCCESS.equals(status)
                     && !SysMediaTask.TaskStatus.FAILED.equals(status)
                     && !SysMediaTask.TaskStatus.RUNNING.equals(status)) {
-                return AjaxResult.error("思想犯 - 任务状态只能为 RUNNING, SUCCESS 或 FAILED");
+                return AjaxResult.error("status must be RUNNING, SUCCESS or FAILED");
             }
 
             boolean success = taskService.reportTaskStatus(taskId, status, errorLog, metaInfo, progress);
-
-            if (success) {
-                if (SysMediaTask.TaskStatus.SUCCESS.equals(status)) {
-                    return AjaxResult.success("夜行 - 节点状态更新成功");
-                } else if (SysMediaTask.TaskStatus.RUNNING.equals(status)) {
-                    return AjaxResult.success("靴の花火 - 节点进度同步成功");
-                } else {
-                    return AjaxResult.success("春泥棒 - 任务失败状态已记录");
-                }
-            } else {
-                return AjaxResult.error("思想犯 - 状态更新失败");
+            if (!success) {
+                return AjaxResult.error("Update task status failed");
             }
-
+            return AjaxResult.success("Task status updated");
         } catch (ServiceException e) {
-            log.error("思想犯 - 状态回报业务异常,taskId: {}, 错误: {}", taskId, e.getMessage());
+            log.error("Report status business error, taskId={}, msg={}", taskId, e.getMessage());
             return AjaxResult.error(e.getMessage());
         } catch (Exception e) {
-            log.error("思想犯 - 状态回报系统异常,taskId: {}, 错误: {}", taskId, e.getMessage(), e);
-            return AjaxResult.error("思想犯 - 系统异常,请稍后重试");
+            log.error("Report status system error, taskId={}", taskId, e);
+            return AjaxResult.error("Report status failed");
         }
     }
 
-    /**
-     * 获取调度中心数据统计
-     * GET /api/v1/tasks/stats
-     */
     @GetMapping("/stats")
     public AjaxResult getStats() {
         List<SysMediaTask> list = taskService.listTasks(null);
         long total = list.size();
-        long pending = list.stream().filter(t -> "PENDING".equals(t.getStatus())).count();
-        long running = list.stream().filter(t -> "RUNNING".equals(t.getStatus())).count();
-        long success = list.stream().filter(t -> "SUCCESS".equals(t.getStatus())).count();
-        long failed = list.stream().filter(t -> "FAILED".equals(t.getStatus())).count();
+        long pending = list.stream().filter(t -> SysMediaTask.TaskStatus.PENDING.equals(t.getStatus())).count();
+        long running = list.stream().filter(t -> SysMediaTask.TaskStatus.RUNNING.equals(t.getStatus())).count();
+        long success = list.stream().filter(t -> SysMediaTask.TaskStatus.SUCCESS.equals(t.getStatus())).count();
+        long failed = list.stream().filter(t -> SysMediaTask.TaskStatus.FAILED.equals(t.getStatus())).count();
 
-        // 计算今日下行流量 (只算今天完成的成功任务且有 fileSize 的)
         LocalDate today = LocalDate.now();
         long todayTrafficBytes = list.stream()
-                .filter(t -> "SUCCESS".equals(t.getStatus()))
+                .filter(t -> SysMediaTask.TaskStatus.SUCCESS.equals(t.getStatus()))
                 .filter(t -> t.getUpdatedAt() != null && t.getUpdatedAt().toLocalDate().isEqual(today))
                 .mapToLong(t -> {
                     if (t.getMetaInfo() != null && t.getMetaInfo().get("fileSize") != null) {
                         try {
                             return Long.parseLong(t.getMetaInfo().get("fileSize").toString());
-                        } catch (Exception e) {
+                        } catch (Exception ignored) {
                             return 0L;
                         }
                     }
@@ -192,185 +145,211 @@ public class MediaTaskController {
         return AjaxResult.success(stats);
     }
 
-    /**
-     * 查询任务详情
-     * 
-     * GET /api/v1/tasks/{taskId}
-     *
-     * @param taskId 任务ID
-     * @return AjaxResult 封装的任务详情
-     */
     @GetMapping("/{taskId}")
-    public AjaxResult getTaskDetail(@PathVariable @NotNull(message = "任务ID不能为空") Long taskId) {
+    public AjaxResult getTaskDetail(@PathVariable @NotNull(message = "taskId cannot be null") Long taskId) {
         try {
             SysMediaTask task = taskService.getTaskById(taskId);
-
             if (task == null) {
-                return AjaxResult.error("又三郎 - 任务不存在");
+                return AjaxResult.error("Task not found");
             }
-
-            return AjaxResult.success("夜行 - 查询成功", task);
-
+            return AjaxResult.success("Task detail", task);
         } catch (Exception e) {
-            log.error("思想犯 - 任务查询异常,taskId: {}, 错误: {}", taskId, e.getMessage(), e);
-            return AjaxResult.error("思想犯 - 查询失败");
+            log.error("Get task detail error, taskId={}", taskId, e);
+            return AjaxResult.error("Get task detail failed");
         }
     }
 
-    /**
-     * 创建新任务 (真实落库)
-     *
-     * POST /api/v1/tasks
-     *
-     * 请求体示例:
-     * {
-     * "taskName": "又三郎 4K MV 抓取",
-     * "targetUrl": "https://youtube.com/watch?v=xxx",
-     * "metaInfo": {
-     * "artist": "ヨルシカ",
-     * "resolution": "4K"
-     * }
-     * }
-     *
-     * 业务规则: Service 层强制设置 status=PENDING 并调用 Mapper 写入 PostgreSQL
-     *
-     * @param task 任务实体 (前端或脚本传入)
-     * @return AjaxResult 落库成功返回任务(含 taskId),失败返回春泥棒文案
-     */
     @PostMapping
     public AjaxResult createTask(@RequestBody @Validated SysMediaTask task) {
         try {
             if (task.getTaskName() == null || task.getTaskName().trim().isEmpty()) {
-                return AjaxResult.error("思想犯 - 任务名称不能为空");
+                return AjaxResult.error("taskName cannot be blank");
             }
             if (task.getTargetUrl() == null || task.getTargetUrl().trim().isEmpty()) {
-                return AjaxResult.error("思想犯 - 目标URL不能为空");
+                return AjaxResult.error("targetUrl cannot be blank");
             }
 
             boolean success = taskService.createTask(task);
-
             if (success) {
-                return AjaxResult.success("夜行 - 任务创建成功", task);
-            } else {
-                return AjaxResult.error("春泥棒 - 任务创建失败，未能落库");
+                return AjaxResult.success("Task created", task);
             }
+            return AjaxResult.error("Create task failed");
         } catch (ServiceException e) {
-            log.error("思想犯 - 任务创建业务异常: {}", e.getMessage());
+            log.error("Create task business error: {}", e.getMessage());
             return AjaxResult.error(e.getMessage());
         } catch (Exception e) {
-            log.error("思想犯 - 任务创建系统异常: {}", e.getMessage(), e);
-            return AjaxResult.error("春泥棒 - 任务创建失败，未能落库");
+            log.error("Create task system error", e);
+            return AjaxResult.error("Create task failed");
         }
     }
 
-    /**
-     * 删除任务
-     *
-     * DELETE /api/v1/tasks/{taskId}
-     *
-     * @param taskId 任务ID
-     * @return 删除结果
-     */
     @DeleteMapping("/{taskId}")
-    public AjaxResult deleteTask(@PathVariable @NotNull(message = "任务ID不能为空") Long taskId) {
+    public AjaxResult deleteTask(@PathVariable @NotNull(message = "taskId cannot be null") Long taskId) {
         try {
             boolean success = taskService.deleteTask(taskId);
             if (success) {
-                return AjaxResult.success("夜行 - 任务清理成功");
-            } else {
-                return AjaxResult.error("春泥棒 - 任务不存在或清理失败");
+                return AjaxResult.success("Task deleted");
             }
+            return AjaxResult.error("Delete task failed or task not found");
         } catch (ServiceException e) {
-            log.error("思想犯 - 任务删除业务异常: {}", e.getMessage());
+            log.error("Delete task business error: {}", e.getMessage());
             return AjaxResult.error(e.getMessage());
         } catch (Exception e) {
-            log.error("思想犯 - 任务删除系统异常: {}", e.getMessage(), e);
-            return AjaxResult.error("思想犯 - 系统异常,请稍后重试");
+            log.error("Delete task system error", e);
+            return AjaxResult.error("Delete task failed");
         }
     }
 
-    /**
-     * 查询全部任务列表（供前端控制台展示）
-     *
-     * GET /api/v1/tasks/list?status=SUCCESS
-     *
-     * @param status 可选状态筛选 (PENDING/RUNNING/SUCCESS/FAILED)
-     * @return 任务列表，按创建时间倒序
-     */
+    @PostMapping("/{taskId}/retry")
+    public AjaxResult retryTask(@PathVariable @NotNull(message = "taskId cannot be null") Long taskId) {
+        try {
+            boolean success = taskService.retryTask(taskId);
+            if (success) {
+                return AjaxResult.success("Task retried");
+            }
+            return AjaxResult.error("Retry task failed");
+        } catch (ServiceException e) {
+            log.error("Retry task business error, taskId={}, msg={}", taskId, e.getMessage());
+            return AjaxResult.error(e.getMessage());
+        } catch (Exception e) {
+            log.error("Retry task system error, taskId={}", taskId, e);
+            return AjaxResult.error("Retry task failed");
+        }
+    }
+
+    @PostMapping("/retry/batch")
+    public AjaxResult retryTasksBatch(@RequestBody Map<String, Object> requestBody) {
+        try {
+            Object rawTaskIds = requestBody.get("taskIds");
+            if (!(rawTaskIds instanceof List<?> rawList) || rawList.isEmpty()) {
+                return AjaxResult.error("taskIds cannot be empty");
+            }
+
+            List<Long> taskIds = new ArrayList<>();
+            for (Object raw : rawList) {
+                if (raw == null) {
+                    continue;
+                }
+                try {
+                    taskIds.add(Long.parseLong(raw.toString()));
+                } catch (Exception ignored) {
+                    // skip invalid id
+                }
+            }
+            if (taskIds.isEmpty()) {
+                return AjaxResult.error("No valid taskIds");
+            }
+
+            int retried = taskService.retryTasks(taskIds);
+            int requested = taskIds.size();
+            int skipped = Math.max(0, requested - retried);
+
+            return AjaxResult.success("Batch retry completed")
+                    .put("requested", requested)
+                    .put("retried", retried)
+                    .put("skipped", skipped);
+        } catch (ServiceException e) {
+            log.error("Batch retry business error: {}", e.getMessage());
+            return AjaxResult.error(e.getMessage());
+        } catch (Exception e) {
+            log.error("Batch retry system error", e);
+            return AjaxResult.error("Batch retry failed");
+        }
+    }
+
     @GetMapping("/list")
-    public AjaxResult listTasks(
-            @RequestParam(name = "status", required = false) String status) {
+    public AjaxResult listTasks(@RequestParam(name = "status", required = false) String status) {
         try {
             List<SysMediaTask> list = taskService.listTasks(status);
-            return AjaxResult.success("夜行 - 任务列表查询成功", list);
+            return AjaxResult.success("Task list", list);
         } catch (Exception e) {
-            log.error("思想犯 - 任务列表查询异常: {}", e.getMessage(), e);
-            return AjaxResult.error("思想犯 - 列表查询失败");
+            log.error("List tasks error", e);
+            return AjaxResult.error("List tasks failed");
         }
     }
 
-    /**
-     * 健康检查接口 - Yorushika 主题
-     * 
-     * GET /api/v1/tasks/health
-     *
-     * @return 健康状态
-     */
     @GetMapping("/health")
     public AjaxResult healthCheck() {
-        return AjaxResult.success("夜行 - 调度中心运行正常")
+        boolean databaseUp = isDatabaseUp();
+        int onlineWorkers = workerRegistry.getOnlineWorkerCount();
+
+        long failedTasks = 0L;
+        Long latestFailedTaskId = null;
+        String latestFailedReason = null;
+
+        try {
+            List<SysMediaTask> failedList = taskService.listTasks(SysMediaTask.TaskStatus.FAILED);
+            failedTasks = failedList.size();
+            if (!failedList.isEmpty()) {
+                SysMediaTask latestFailed = failedList.get(0);
+                latestFailedTaskId = latestFailed.getTaskId();
+                latestFailedReason = latestFailed.getErrorLog();
+            }
+        } catch (Exception e) {
+            log.warn("Health check failed to query failed task summary: {}", e.getMessage());
+        }
+
+        String serviceStatus = databaseUp ? "RUNNING" : "DEGRADED";
+        String msg = databaseUp ? "Service running" : "Service degraded (database down)";
+
+        return AjaxResult.success(msg)
                 .put("service", "Amy Dispatch Center")
-                .put("theme", "ヨルシカ (Yorushika)")
-                .put("status", "RUNNING");
+                .put("theme", "Yorushika")
+                .put("status", serviceStatus)
+                .put("database", databaseUp ? "UP" : "DOWN")
+                .put("onlineWorkers", onlineWorkers)
+                .put("failedTasks", failedTasks)
+                .put("latestFailedTaskId", latestFailedTaskId)
+                .put("latestFailedReason", latestFailedReason)
+                .put("serverTime", LocalDateTime.now().toString());
     }
 
-    /**
-     * 直链下载/在线流播接口
-     * 
-     * GET /api/v1/tasks/{taskId}/download
-     *
-     * @param taskId 任务ID
-     * @return 文件流
-     */
+    private boolean isDatabaseUp() {
+        try {
+            Integer one = jdbcTemplate.queryForObject("SELECT 1", Integer.class);
+            return one != null && one == 1;
+        } catch (Exception e) {
+            log.warn("Database probe failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
     @GetMapping("/{taskId}/download")
     public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadFile(
-            @PathVariable @NotNull(message = "任务ID不能为空") Long taskId) {
+            @PathVariable @NotNull(message = "taskId cannot be null") Long taskId) {
         try {
             SysMediaTask task = taskService.getTaskById(taskId);
-            if (task == null || !"SUCCESS".equals(task.getStatus())) {
+            if (task == null || !SysMediaTask.TaskStatus.SUCCESS.equals(task.getStatus())) {
                 return org.springframework.http.ResponseEntity.notFound().build();
             }
 
-            // 从 metaInfo 获取 filePath
-            java.util.Map<String, Object> metaInfo = task.getMetaInfo();
+            Map<String, Object> metaInfo = task.getMetaInfo();
             if (metaInfo == null || !metaInfo.containsKey("filePath")) {
                 return org.springframework.http.ResponseEntity.notFound().build();
             }
 
-            String filePath = (String) metaInfo.get("filePath");
-            java.io.File file = new java.io.File(filePath);
-
+            String filePath = String.valueOf(metaInfo.get("filePath"));
+            File file = new File(filePath);
             if (!file.exists()) {
-                log.error("春泥棒 - 文件在磁盘上找不到: {}", filePath);
+                log.error("File not found on disk: {}", filePath);
                 return org.springframework.http.ResponseEntity.notFound().build();
             }
 
             org.springframework.core.io.Resource resource = new org.springframework.core.io.FileSystemResource(file);
 
-            // 推断 MIME 类型
             String contentType = "application/octet-stream";
             String fileName = file.getName().toLowerCase();
-            if (fileName.endsWith(".mp3"))
+            if (fileName.endsWith(".mp3")) {
                 contentType = "audio/mpeg";
-            else if (fileName.endsWith(".flac"))
+            } else if (fileName.endsWith(".flac")) {
                 contentType = "audio/flac";
-            else if (fileName.endsWith(".mp4"))
+            } else if (fileName.endsWith(".mp4")) {
                 contentType = "video/mp4";
-            else if (fileName.endsWith(".webm"))
+            } else if (fileName.endsWith(".webm")) {
                 contentType = "video/webm";
+            }
 
-            // 附件名为原始文件名，处理中文编码
-            String encodedFileName = java.net.URLEncoder.encode(file.getName(), java.nio.charset.StandardCharsets.UTF_8)
+            String encodedFileName = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8)
                     .replaceAll("\\+", "%20");
 
             return org.springframework.http.ResponseEntity.ok()
@@ -381,7 +360,7 @@ public class MediaTaskController {
                     .body(resource);
 
         } catch (Exception e) {
-            log.error("思想犯 - 文件流式传输异常: {}", e.getMessage(), e);
+            log.error("Download stream failed", e);
             return org.springframework.http.ResponseEntity.internalServerError().build();
         }
     }

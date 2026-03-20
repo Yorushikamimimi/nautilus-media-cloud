@@ -10,7 +10,7 @@ import java.util.HashMap;
  * RuoYi 标准响应结果封装类
  * 用于统一 API 响应格式
  *
- * @author Nautilus Media Cloud
+ * @author nautilus-media-cloud
  */
 @Data
 @NoArgsConstructor

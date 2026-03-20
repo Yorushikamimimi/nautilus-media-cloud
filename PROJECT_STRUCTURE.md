@@ -1,4 +1,4 @@
-# 流媒体调度中台 - 项目结构总览
+# Nautilus 任务调度示例 - 项目结构总览
 
 ## 📁 完整文件清单
 
@@ -82,9 +82,8 @@ public SysMediaTask pullPendingTask(String workerNode) {
 ```java
 @GetMapping("/pending")
 public AjaxResult pullTask(@RequestParam String workerNode) {
-    return task == null 
-        ? AjaxResult.noContent("思想犯 - 当前无待处理任务")
-        : AjaxResult.success("夜行 - 任务拉取成功", task);
+    // 无任务：AjaxResult.noContent("No pending task")
+    // 有任务：AjaxResult.success("Task pulled", task)
 }
 ```
 
@@ -218,4 +217,4 @@ curl -X PUT http://localhost:8080/api/v1/tasks/1/status \
 
 ---
 
-> **夜行 - 代码生成完毕,愿调度中台稳如磐石** 🌙
+> **夜行 - 愿任务队列与状态机逻辑清晰可维护** 🌙

@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 echo -e "${CYAN}============================================================${NC}"
 echo -e "${CYAN}🌙 Elma Stream Worker 启动器${NC}"
-echo -e "${CYAN}   Nautilus Media Cloud - Python Data Plane${NC}"
+echo -e "${CYAN}   Nautilus - Python Worker（数据面）${NC}"
 echo -e "${CYAN}============================================================${NC}"
 echo ""
 

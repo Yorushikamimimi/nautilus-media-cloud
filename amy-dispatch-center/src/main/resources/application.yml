@@ -3,21 +3,16 @@ server:
   servlet:
     context-path: /
 
-# 调度中心 API 鉴权（Worker/前端需携带相同 Token；请设置环境变量 NAUTILUS_AUTH_TOKEN 或修改默认值）
-nautilus:
-  auth:
-    token: ${NAUTILUS_AUTH_TOKEN:change-me}
-
 spring:
   application:
     name: amy-dispatch-center
   
-  # PostgreSQL 数据源配置（请设置环境变量 DB_PASSWORD 或在此处替换为本地密码，勿提交真实密码）
+  # PostgreSQL 数据源配置
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/nautilus_dispatch?stringtype=unspecified
-    username: postgres
-    password: ${DB_PASSWORD:your_postgres_password}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nautilus_dispatch?stringtype=unspecified}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     hikari:
       # 连接池配置
       minimum-idle: 5
@@ -70,9 +65,31 @@ mybatis-plus:
 
 # 日志配置
 logging:
+  file:
+    name: logs/backend.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: logs/backend.%d{yyyy-MM-dd}.%i.log
+      max-file-size: 20MB
+      max-history: 14
+      total-size-cap: 500MB
   level:
     root: INFO
     com.nautilus.dispatch: DEBUG
     com.nautilus.dispatch.mapper: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+# API Bearer 与 Python Worker 一致；可用环境变量 NAUTILUS_AUTH_TOKEN 覆盖
+nautilus:
+  auth:
+    token: ${NAUTILUS_AUTH_TOKEN:changeme}
+
+task:
+  retry:
+    default-max: 3
+    base-delay-seconds: 30
+    max-delay-seconds: 1800
+  running-timeout-seconds: 900
+  reclaim-interval-ms: 30000

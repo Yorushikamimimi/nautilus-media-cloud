@@ -4,161 +4,152 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.nautilus.common.exception.ServiceException;
 import com.nautilus.dispatch.domain.entity.SysMediaTask;
+import com.nautilus.dispatch.domain.event.TaskUpdateEvent;
 import com.nautilus.dispatch.mapper.SysMediaTaskMapper;
 import com.nautilus.dispatch.service.ISysMediaTaskService;
-import com.nautilus.dispatch.domain.event.TaskUpdateEvent;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-/**
- * 媒体任务服务实现类
- *
- * @author Nautilus Media Cloud
- */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, SysMediaTask>
         implements ISysMediaTaskService {
 
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
+    private static final int MAX_ERROR_LOG_LENGTH = 4000;
 
-    /**
-     * 拉取待处理任务 - 带事务控制
-     * 
-     * 异常兜底策略:
-     * 1. 无可用任务时返回 null,不抛出异常
-     * 2. 记录 Yorushika 主题的警告日志
-     * 3. 由 Controller 层统一封装为 204 响应
-     *
-     * @param workerNode 工作节点标识
-     * @return 拉取到的任务
-     */
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${task.retry.default-max:3}")
+    private int defaultMaxRetry;
+
+    @Value("${task.retry.base-delay-seconds:30}")
+    private long retryBaseDelaySeconds;
+
+    @Value("${task.retry.max-delay-seconds:1800}")
+    private long retryMaxDelaySeconds;
+
+    @Value("${task.running-timeout-seconds:900}")
+    private int runningTimeoutSeconds;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public SysMediaTask pullPendingTask(String workerNode) {
         if (workerNode == null || workerNode.trim().isEmpty()) {
-            log.error("思想犯 - 工作节点标识不能为空");
-            throw new ServiceException("思想犯 - 工作节点标识不能为空");
+            throw new ServiceException("workerNode cannot be blank");
         }
 
         try {
-            // 同一事务内: 先锁定一条 PENDING 任务,再更新为 RUNNING,避免 UPDATE RETURNING 在 JDBC/MyBatis
-            // 下的兼容问题
             SysMediaTask task = baseMapper.selectOnePendingForUpdate();
             if (task == null) {
-                log.warn("思想犯 - 节点 [{}] 未拉取到可用任务", workerNode);
                 return null;
             }
+
             baseMapper.updateTaskToRunning(task.getTaskId(), workerNode);
             task.setStatus(SysMediaTask.TaskStatus.RUNNING);
             task.setWorkerNode(workerNode);
+            task.setNextRetryAt(null);
             task.setUpdatedAt(LocalDateTime.now());
 
-            log.info("夜行 - 节点 [{}] 成功拉取任务 [taskId={}, taskName={}]",
-                    workerNode, task.getTaskId(), task.getTaskName());
-
-            // 发布 SSE 更新事件
             eventPublisher.publishEvent(new TaskUpdateEvent(this, task));
-
+            log.info("Task pulled: taskId={}, workerNode={}", task.getTaskId(), workerNode);
             return task;
-
+        } catch (ServiceException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("思想犯 - 任务拉取失败,节点: {}, 错误: {}", workerNode, e.getMessage(), e);
-            throw new ServiceException("思想犯 - 任务拉取失败: " + e.getMessage());
+            log.error("Failed to pull pending task, workerNode={}", workerNode, e);
+            throw new ServiceException("Failed to pull pending task: " + e.getMessage());
         }
     }
 
-    /**
-     * 回报任务状态 - 带事务控制和异常处理,支持回填 metaInfo
-     *
-     * @param taskId   任务ID
-     * @param status   新状态
-     * @param errorLog 错误日志
-     * @param metaInfo 元数据 (可选)
-     * @param metaInfo 元数据 (可选)
-     * @param progress 即时进度百分比 (可选)
-     * @return 是否更新成功
-     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean reportTaskStatus(Long taskId, String status, String errorLog, Map<String, Object> metaInfo,
             String progress) {
         if (taskId == null) {
-            log.error("思想犯 - 任务ID不能为空");
-            throw new ServiceException("思想犯 - 任务ID不能为空");
+            throw new ServiceException("taskId cannot be null");
         }
 
-        // 验证状态值合法性
         if (!SysMediaTask.TaskStatus.SUCCESS.equals(status)
                 && !SysMediaTask.TaskStatus.FAILED.equals(status)
                 && !SysMediaTask.TaskStatus.RUNNING.equals(status)) {
-            log.error("思想犯 - 无效的任务状态: {}", status);
-            throw new ServiceException("思想犯 - 任务状态只能为 RUNNING, SUCCESS 或 FAILED");
+            throw new ServiceException("status must be RUNNING, SUCCESS or FAILED");
         }
 
         try {
-            // 先查询任务是否存在
             SysMediaTask existingTask = baseMapper.selectById(taskId);
             if (existingTask == null) {
-                log.error("又三郎 - 任务不存在, taskId: {}", taskId);
-                throw new ServiceException("又三郎 - 任务不存在");
+                throw new ServiceException("task not found: " + taskId);
             }
 
-            // 验证任务状态流转合法性
-            if (!SysMediaTask.TaskStatus.RUNNING.equals(existingTask.getStatus())) {
-                log.warn("盗作 - 任务状态异常,当前状态: {}, 期望状态: RUNNING, taskId: {}",
-                        existingTask.getStatus(), taskId);
-            }
-
-            // 如果是 RUNNING 状态的进度更新，不落库，直接发送 SSE 广播后返回
             if (SysMediaTask.TaskStatus.RUNNING.equals(status)) {
+                baseMapper.touchTaskHeartbeat(taskId);
                 existingTask.setProgress(progress);
+                existingTask.setUpdatedAt(LocalDateTime.now());
                 eventPublisher.publishEvent(new TaskUpdateEvent(this, existingTask));
                 return true;
             }
 
-            int affectedRows = baseMapper.updateTaskStatus(taskId, status, errorLog, metaInfo);
-
-            if (affectedRows > 0) {
-                if (SysMediaTask.TaskStatus.SUCCESS.equals(status)) {
-                    log.info("夜行 - 任务执行成功, taskId: {}, taskName: {}",
-                            taskId, existingTask.getTaskName());
-                } else {
-                    log.warn("春泥棒 - 任务执行失败, taskId: {}, 错误: {}", taskId, errorLog);
+            if (SysMediaTask.TaskStatus.SUCCESS.equals(status)) {
+                int affectedRows = baseMapper.updateTaskStatus(taskId, status, null, metaInfo);
+                if (affectedRows <= 0) {
+                    return false;
                 }
 
-                // 更细实体的状态用于事件广播
-                existingTask.setStatus(status);
-                existingTask.setErrorLog(errorLog);
+                existingTask.setStatus(SysMediaTask.TaskStatus.SUCCESS);
+                existingTask.setErrorLog(null);
+                existingTask.setNextRetryAt(null);
                 existingTask.setUpdatedAt(LocalDateTime.now());
-                // 发布 SSE 更新事件
+                if (metaInfo != null) {
+                    existingTask.setMetaInfo(metaInfo);
+                }
                 eventPublisher.publishEvent(new TaskUpdateEvent(this, existingTask));
-
+                log.info("Task completed: taskId={}", taskId);
                 return true;
-            } else {
-                log.error("思想犯 - 状态更新失败, taskId: {}", taskId);
-                return false;
             }
 
+            return handleFailureWithRetry(existingTask, errorLog, "worker");
         } catch (ServiceException e) {
             throw e;
         } catch (Exception e) {
-            log.error("思想犯 - 状态回报异常, taskId: {}, 错误: {}", taskId, e.getMessage(), e);
-            throw new ServiceException("思想犯 - 状态回报失败: " + e.getMessage());
+            log.error("Failed to report status, taskId={}, status={}", taskId, status, e);
+            throw new ServiceException("Failed to report task status: " + e.getMessage());
         }
     }
 
-    /**
-     * 查询任务列表（供前端控制台使用），按创建时间倒序
-     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int reclaimTimedOutRunningTasks() {
+        List<SysMediaTask> timedOutTasks = baseMapper.selectTimedOutRunningForUpdate(runningTimeoutSeconds);
+        if (timedOutTasks.isEmpty()) {
+            return 0;
+        }
+
+        int reclaimed = 0;
+        for (SysMediaTask task : timedOutTasks) {
+            String timeoutReason = "RUNNING timeout exceeded: " + runningTimeoutSeconds + "s";
+            boolean updated = handleFailureWithRetry(task, timeoutReason, "timeout-reclaimer");
+            if (updated) {
+                reclaimed++;
+            }
+        }
+
+        if (reclaimed > 0) {
+            log.warn("Reclaimed timed-out running tasks: {}", reclaimed);
+        }
+        return reclaimed;
+    }
+
     @Override
     public List<SysMediaTask> listTasks(String status) {
         LambdaQueryWrapper<SysMediaTask> wrapper = new LambdaQueryWrapper<SysMediaTask>()
@@ -169,103 +160,251 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
         return this.list(wrapper);
     }
 
-    /**
-     * 根据ID查询任务详情
-     *
-     * @param taskId 任务ID
-     * @return 任务实体
-     */
     @Override
     public SysMediaTask getTaskById(Long taskId) {
         if (taskId == null) {
-            log.error("思想犯 - 任务ID不能为空");
-            throw new ServiceException("思想犯 - 任务ID不能为空");
+            throw new ServiceException("taskId cannot be null");
         }
 
-        SysMediaTask task = baseMapper.selectById(taskId);
-        if (task == null) {
-            log.warn("又三郎 - 任务不存在, taskId: {}", taskId);
-        }
-        return task;
+        return baseMapper.selectById(taskId);
     }
 
-    /**
-     * 创建新任务并落库
-     *
-     * 业务约束:
-     * 1. 强制设置初始状态为 PENDING
-     * 2. 清空 taskId 确保走 insert 而非 update
-     * 3. 设置创建/更新时间后调用 Mapper 真正写入 PostgreSQL
-     *
-     * @param task 任务实体 (前端或脚本传入)
-     * @return 是否落库成功
-     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean createTask(SysMediaTask task) {
         if (task == null) {
-            log.error("思想犯 - 任务对象不能为空");
-            throw new ServiceException("思想犯 - 任务对象不能为空");
+            throw new ServiceException("task cannot be null");
         }
 
-        // 1. 强制校验并设置初始状态为 PENDING (防止前端传入 RUNNING/SUCCESS 等)
         task.setStatus(SysMediaTask.TaskStatus.PENDING);
-        // 2. 确保为新增: 清空主键,由数据库自增生成
         task.setTaskId(null);
-        // 3. 新任务不绑定节点、无错误日志
         task.setWorkerNode(null);
         task.setErrorLog(null);
-        // 4. 设置创建/更新时间 (不依赖 MetaObjectHandler,保证落库必有值)
+        task.setRetryCount(0);
+        task.setMaxRetry(resolveMaxRetry(task.getMaxRetry()));
+        task.setNextRetryAt(null);
+
         LocalDateTime now = LocalDateTime.now();
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
 
         try {
-            // 5. 调用 MyBatis-Plus save -> 底层 insert 真正写入数据库
             boolean saved = this.save(task);
-            if (saved) {
-                log.info("夜行 - 任务创建成功已落库, taskId: {}, taskName: {}",
-                        task.getTaskId(), task.getTaskName());
-
-                // 发布 SSE 更新事件
-                eventPublisher.publishEvent(new TaskUpdateEvent(this, task));
-
-                return true;
-            } else {
-                log.error("春泥棒 - 任务创建失败，未能落库 (save 返回 false)");
+            if (!saved) {
                 return false;
             }
+
+            eventPublisher.publishEvent(new TaskUpdateEvent(this, task));
+            return true;
         } catch (Exception e) {
-            log.error("春泥棒 - 任务创建失败，未能落库: {}", e.getMessage(), e);
-            throw new ServiceException("春泥棒 - 任务创建失败，未能落库");
+            Throwable root = getRootCause(e);
+            String rootMsg = root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
+            String lowerMsg = rootMsg.toLowerCase();
+
+            if (lowerMsg.contains("connection refused")
+                    || lowerMsg.contains("the connection attempt failed")
+                    || lowerMsg.contains("failed to obtain jdbc connection")) {
+                throw new ServiceException("Database connection failed, please start PostgreSQL first");
+            }
+
+            if (lowerMsg.contains("relation") && lowerMsg.contains("sys_media_task") && lowerMsg.contains("does not exist")) {
+                throw new ServiceException("Table sys_media_task does not exist, please run db/schema.sql");
+            }
+
+            throw new ServiceException("Failed to create task: " + rootMsg);
         }
     }
 
-    /**
-     * 删除任务（物理删除）
-     *
-     * @param taskId 任务ID
-     * @return 是否删除成功
-     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean retryTask(Long taskId) {
+        if (taskId == null) {
+            throw new ServiceException("taskId cannot be null");
+        }
+        SysMediaTask task = baseMapper.selectById(taskId);
+        if (task == null) {
+            throw new ServiceException("task not found: " + taskId);
+        }
+        return resetTaskForManualRetry(task);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int retryTasks(List<Long> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) {
+            return 0;
+        }
+
+        Set<Long> uniqueIds = new LinkedHashSet<>();
+        for (Long taskId : taskIds) {
+            if (taskId != null) {
+                uniqueIds.add(taskId);
+            }
+        }
+        if (uniqueIds.isEmpty()) {
+            return 0;
+        }
+
+        int retried = 0;
+        for (Long taskId : uniqueIds) {
+            SysMediaTask task = baseMapper.selectById(taskId);
+            if (task == null) {
+                continue;
+            }
+            if (resetTaskForManualRetry(task)) {
+                retried++;
+            }
+        }
+        return retried;
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean deleteTask(Long taskId) {
         if (taskId == null) {
-            log.error("思想犯 - 任务ID不能为空");
-            throw new ServiceException("思想犯 - 任务ID不能为空");
+            throw new ServiceException("taskId cannot be null");
         }
         try {
-            boolean removed = this.removeById(taskId);
-            if (removed) {
-                log.info("夜行 - 任务删除成功, taskId: {}", taskId);
-                return true;
-            } else {
-                log.warn("又三郎 - 任务删除失败或不存在, taskId: {}", taskId);
+            return this.removeById(taskId);
+        } catch (Exception e) {
+            throw new ServiceException("Failed to delete task: " + e.getMessage());
+        }
+    }
+
+    private boolean resetTaskForManualRetry(SysMediaTask task) {
+        if (task == null || task.getTaskId() == null) {
+            return false;
+        }
+
+        if (SysMediaTask.TaskStatus.RUNNING.equals(task.getStatus())) {
+            throw new ServiceException("task is RUNNING and cannot be retried manually: " + task.getTaskId());
+        }
+
+        String oldError = task.getErrorLog();
+        String retryLog = null;
+        if (oldError != null && !oldError.trim().isEmpty()) {
+            retryLog = truncateErrorLog("[manual-retry] " + oldError.trim());
+        }
+
+        task.setStatus(SysMediaTask.TaskStatus.PENDING);
+        task.setWorkerNode(null);
+        task.setRetryCount(0);
+        task.setMaxRetry(resolveMaxRetry(task.getMaxRetry()));
+        task.setNextRetryAt(null);
+        task.setErrorLog(retryLog);
+        task.setUpdatedAt(LocalDateTime.now());
+
+        boolean updated = this.updateById(task);
+        if (updated) {
+            eventPublisher.publishEvent(new TaskUpdateEvent(this, task));
+        }
+        return updated;
+    }
+
+    private boolean handleFailureWithRetry(SysMediaTask task, String errorLog, String source) {
+        int retryCount = safeNonNegative(task.getRetryCount(), 0);
+        int maxRetry = resolveMaxRetry(task.getMaxRetry());
+        String normalizedReason = normalizeErrorLog(errorLog);
+
+        if (retryCount < maxRetry) {
+            int nextRetryCount = retryCount + 1;
+            long backoffSeconds = computeBackoffSeconds(nextRetryCount);
+            LocalDateTime nextRetryAt = LocalDateTime.now().plusSeconds(backoffSeconds);
+
+            String retryLog = truncateErrorLog(String.format(
+                    "[%s] %s | retry %d/%d in %ds at %s",
+                    source,
+                    normalizedReason,
+                    nextRetryCount,
+                    maxRetry,
+                    backoffSeconds,
+                    nextRetryAt));
+
+            int affectedRows = baseMapper.scheduleTaskRetry(task.getTaskId(), nextRetryCount, nextRetryAt, retryLog);
+            if (affectedRows <= 0) {
                 return false;
             }
-        } catch (Exception e) {
-            log.error("思想犯 - 任务删除系统异常, taskId: {}, 错误: {}", taskId, e.getMessage(), e);
-            throw new ServiceException("思想犯 - 任务删除失败: " + e.getMessage());
+
+            task.setStatus(SysMediaTask.TaskStatus.PENDING);
+            task.setWorkerNode(null);
+            task.setRetryCount(nextRetryCount);
+            task.setMaxRetry(maxRetry);
+            task.setNextRetryAt(nextRetryAt);
+            task.setErrorLog(retryLog);
+            task.setUpdatedAt(LocalDateTime.now());
+            eventPublisher.publishEvent(new TaskUpdateEvent(this, task));
+
+            log.warn("Task requeued: taskId={}, retry={}/{}, nextRetryAt={}",
+                    task.getTaskId(), nextRetryCount, maxRetry, nextRetryAt);
+            return true;
         }
+
+        String finalLog = truncateErrorLog(String.format(
+                "[%s] %s | max retry reached (%d/%d)",
+                source,
+                normalizedReason,
+                retryCount,
+                maxRetry));
+
+        int affectedRows = baseMapper.markTaskFinalFailed(task.getTaskId(), finalLog);
+        if (affectedRows <= 0) {
+            return false;
+        }
+
+        task.setStatus(SysMediaTask.TaskStatus.FAILED);
+        task.setWorkerNode(null);
+        task.setMaxRetry(maxRetry);
+        task.setNextRetryAt(null);
+        task.setErrorLog(finalLog);
+        task.setUpdatedAt(LocalDateTime.now());
+        eventPublisher.publishEvent(new TaskUpdateEvent(this, task));
+
+        log.error("Task failed permanently: taskId={}, retry={}/{}, reason={}",
+                task.getTaskId(), retryCount, maxRetry, normalizedReason);
+        return true;
+    }
+
+    private int resolveMaxRetry(Integer configuredMaxRetry) {
+        int value = safeNonNegative(configuredMaxRetry, defaultMaxRetry);
+        return value <= 0 ? Math.max(defaultMaxRetry, 1) : value;
+    }
+
+    private int safeNonNegative(Integer value, int defaultValue) {
+        if (value == null || value < 0) {
+            return defaultValue;
+        }
+        return value;
+    }
+
+    private long computeBackoffSeconds(int retryAttempt) {
+        int safeAttempt = Math.max(retryAttempt, 1);
+        long factor = 1L << Math.min(safeAttempt - 1, 20);
+        long raw = retryBaseDelaySeconds * factor;
+        return Math.min(raw, retryMaxDelaySeconds);
+    }
+
+    private String normalizeErrorLog(String errorLog) {
+        if (errorLog == null || errorLog.trim().isEmpty()) {
+            return "unknown worker error";
+        }
+        return errorLog.trim();
+    }
+
+    private String truncateErrorLog(String errorLog) {
+        if (errorLog == null) {
+            return null;
+        }
+        if (errorLog.length() <= MAX_ERROR_LOG_LENGTH) {
+            return errorLog;
+        }
+        return errorLog.substring(0, MAX_ERROR_LOG_LENGTH) + "...";
+    }
+
+    private Throwable getRootCause(Throwable throwable) {
+        Throwable root = throwable;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root;
     }
 }

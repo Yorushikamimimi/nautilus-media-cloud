@@ -6,6 +6,8 @@
 ```bash
 export BASE_URL="http://localhost:8080/api/v1/tasks"
 export WORKER_NODE="worker-node-test-01"
+export NAUTILUS_AUTH_TOKEN="${NAUTILUS_AUTH_TOKEN:-changeme}"
+# 以下 curl 均需鉴权；若省略本变量则默认为 changeme（与 application.yml 一致）
 ```
 
 ---
@@ -14,7 +16,7 @@ export WORKER_NODE="worker-node-test-01"
 
 ```bash
 # 测试服务是否正常运行
-curl -X GET "${BASE_URL}/health" | jq
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X GET "${BASE_URL}/health" | jq
 
 # 预期响应:
 # {
@@ -32,7 +34,7 @@ curl -X GET "${BASE_URL}/health" | jq
 
 ### 测试 1: 正常拉取
 ```bash
-curl -X GET "${BASE_URL}/pending?workerNode=${WORKER_NODE}" | jq
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X GET "${BASE_URL}/pending?workerNode=${WORKER_NODE}" | jq
 
 # 预期响应:
 # {
@@ -52,7 +54,7 @@ curl -X GET "${BASE_URL}/pending?workerNode=${WORKER_NODE}" | jq
 ### 测试 2: 无可用任务
 ```bash
 # 拉取所有任务后再次请求
-curl -X GET "${BASE_URL}/pending?workerNode=worker-no-task" | jq
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X GET "${BASE_URL}/pending?workerNode=worker-no-task" | jq
 
 # 预期响应:
 # {
@@ -65,7 +67,7 @@ curl -X GET "${BASE_URL}/pending?workerNode=worker-no-task" | jq
 ### 测试 3: 参数校验
 ```bash
 # 缺少 workerNode 参数
-curl -X GET "${BASE_URL}/pending" | jq
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X GET "${BASE_URL}/pending" | jq
 
 # 预期响应: 400 参数校验失败
 ```
@@ -76,7 +78,7 @@ curl -X GET "${BASE_URL}/pending" | jq
 
 ```bash
 # 查询 ID 为 1 的任务
-curl -X GET "${BASE_URL}/1" | jq
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X GET "${BASE_URL}/1" | jq
 
 # 预期响应:
 # {
@@ -92,7 +94,7 @@ curl -X GET "${BASE_URL}/1" | jq
 
 ```bash
 # 查询不存在的任务
-curl -X GET "${BASE_URL}/99999" | jq
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X GET "${BASE_URL}/99999" | jq
 
 # 预期响应:
 # {
@@ -107,7 +109,7 @@ curl -X GET "${BASE_URL}/99999" | jq
 
 ### 测试 1: 创建基础任务
 ```bash
-curl -X POST "${BASE_URL}" \
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X POST "${BASE_URL}" \
   -H "Content-Type: application/json" \
   -d '{
     "taskName": "言って Live Tour 2024",
@@ -135,7 +137,7 @@ curl -X POST "${BASE_URL}" \
 
 ### 测试 2: 创建复杂 JSONB 元数据任务
 ```bash
-curl -X POST "${BASE_URL}" \
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X POST "${BASE_URL}" \
   -H "Content-Type: application/json" \
   -d '{
     "taskName": "盗作专辑完整版",
@@ -156,7 +158,7 @@ curl -X POST "${BASE_URL}" \
 ### 测试 3: 参数校验失败
 ```bash
 # 缺少 taskName
-curl -X POST "${BASE_URL}" \
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X POST "${BASE_URL}" \
   -H "Content-Type: application/json" \
   -d '{
     "targetUrl": "https://youtube.com/watch?v=test"
@@ -175,7 +177,7 @@ curl -X POST "${BASE_URL}" \
 
 ### 测试 1: 任务成功完成
 ```bash
-curl -X PUT "${BASE_URL}/1/status" \
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X PUT "${BASE_URL}/1/status" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "SUCCESS"
@@ -190,7 +192,7 @@ curl -X PUT "${BASE_URL}/1/status" \
 
 ### 测试 2: 任务执行失败
 ```bash
-curl -X PUT "${BASE_URL}/2/status" \
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X PUT "${BASE_URL}/2/status" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "FAILED",
@@ -206,7 +208,7 @@ curl -X PUT "${BASE_URL}/2/status" \
 
 ### 测试 3: 无效状态值
 ```bash
-curl -X PUT "${BASE_URL}/3/status" \
+curl -H "Authorization: Bearer $NAUTILUS_AUTH_TOKEN" -X PUT "${BASE_URL}/3/status" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "INVALID_STATUS"
@@ -233,6 +235,7 @@ curl -X PUT "${BASE_URL}/3/status" \
 # 配置
 BASE_URL="http://localhost:8080/api/v1/tasks"
 CONCURRENT_NODES=10
+NAUTILUS_AUTH_TOKEN="${NAUTILUS_AUTH_TOKEN:-changeme}"
 
 echo "🎵 Yorushika 主题并发拉取测试"
 echo "========================================"
@@ -245,7 +248,7 @@ for i in $(seq 1 $CONCURRENT_NODES); do
   WORKER_NODE=$(printf "worker-node-%02d" $i)
   echo "[$i] 节点 ${WORKER_NODE} 开始拉取..."
   
-  curl -s -X GET "${BASE_URL}/pending?workerNode=${WORKER_NODE}" \
+  curl -s -H "Authorization: Bearer ${NAUTILUS_AUTH_TOKEN}" -X GET "${BASE_URL}/pending?workerNode=${WORKER_NODE}" \
     | jq -c '{code: .code, msg: .msg, taskId: .data.taskId, taskName: .data.taskName}' &
 done
 
@@ -327,13 +330,14 @@ Write-Host "✅ 并发测试完成" -ForegroundColor Green
 #!/bin/bash
 
 BASE_URL="http://localhost:8080/api/v1/tasks"
+NAUTILUS_AUTH_TOKEN="${NAUTILUS_AUTH_TOKEN:-changeme}"
 
 echo "🎵 测试任务完整生命周期"
 echo "========================================"
 
 # 1. 创建任务
 echo "1️⃣ 创建任务..."
-TASK_ID=$(curl -s -X POST "${BASE_URL}" \
+TASK_ID=$(curl -s -H "Authorization: Bearer ${NAUTILUS_AUTH_TOKEN}" -X POST "${BASE_URL}" \
   -H "Content-Type: application/json" \
   -d '{
     "taskName": "夜明けと蛍 Full MV",
@@ -347,27 +351,27 @@ sleep 1
 # 2. 拉取任务
 echo ""
 echo "2️⃣ 节点拉取任务..."
-PULLED_TASK=$(curl -s -X GET "${BASE_URL}/pending?workerNode=test-worker")
+PULLED_TASK=$(curl -s -H "Authorization: Bearer ${NAUTILUS_AUTH_TOKEN}" -X GET "${BASE_URL}/pending?workerNode=test-worker")
 echo "$PULLED_TASK" | jq '.data | {taskId, taskName, status}'
 sleep 1
 
 # 3. 查询任务详情
 echo ""
 echo "3️⃣ 查询任务详情..."
-curl -s -X GET "${BASE_URL}/${TASK_ID}" | jq '.data | {taskId, taskName, status, workerNode}'
+curl -s -H "Authorization: Bearer ${NAUTILUS_AUTH_TOKEN}" -X GET "${BASE_URL}/${TASK_ID}" | jq '.data | {taskId, taskName, status, workerNode}'
 sleep 1
 
 # 4. 回报成功
 echo ""
 echo "4️⃣ 回报任务成功..."
-curl -s -X PUT "${BASE_URL}/${TASK_ID}/status" \
+curl -s -H "Authorization: Bearer ${NAUTILUS_AUTH_TOKEN}" -X PUT "${BASE_URL}/${TASK_ID}/status" \
   -H "Content-Type: application/json" \
   -d '{"status":"SUCCESS"}' | jq '{code, msg}'
 
 # 5. 验证最终状态
 echo ""
 echo "5️⃣ 验证最终状态..."
-curl -s -X GET "${BASE_URL}/${TASK_ID}" | jq '.data | {taskId, taskName, status}'
+curl -s -H "Authorization: Bearer ${NAUTILUS_AUTH_TOKEN}" -X GET "${BASE_URL}/${TASK_ID}" | jq '.data | {taskId, taskName, status}'
 
 echo ""
 echo "========================================"
@@ -378,14 +382,16 @@ echo "✅ 完整流程测试完成"
 
 ## 📊 性能测试 (使用 Apache Bench)
 
+接口需 Bearer；示例（请替换 Token）：
+
 ### 测试 1: 健康检查接口
 ```bash
-ab -n 1000 -c 10 http://localhost:8080/api/v1/tasks/health
+ab -n 1000 -c 10 -H "Authorization: Bearer changeme" http://localhost:8080/api/v1/tasks/health
 ```
 
 ### 测试 2: 并发拉取任务
 ```bash
-ab -n 100 -c 10 "http://localhost:8080/api/v1/tasks/pending?workerNode=ab-test"
+ab -n 100 -c 10 -H "Authorization: Bearer changeme" "http://localhost:8080/api/v1/tasks/pending?workerNode=ab-test"
 ```
 
 ---

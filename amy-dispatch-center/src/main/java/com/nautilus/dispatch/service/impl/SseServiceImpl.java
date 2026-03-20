@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * SSE 服务实现类
  *
- * @author Nautilus Media Cloud
+ * @author nautilus-media-cloud
  */
 @Slf4j
 @Service

@@ -19,7 +19,7 @@ import java.io.PrintWriter;
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
 
-    @Value("${nautilus.auth.token:change-me}")
+    @Value("${nautilus.auth.token:changeme}")
     private String requireToken;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -32,11 +32,8 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        // 放行 Worker 节点的 /pending 和 /status 接口 (本例中假设 Worker 和 Backend
-        // 是内部安全域，不需要复杂鉴权，或者是固定放行)
-        // 为了安全起见，我们暂时要求所有调用都带 token，除了 Worker 节点的 /pending?workerNode=Elma-Node-01
-        // 但更简单的方式是：针对前端的请求(比如 /create, /list, /delete 等)必须校验 Token。
-        // 这里采用一刀切简单口令校验：Header 里拿 Authorization
+        // 演示用：所有 /api/**（除 WebMvcConfig 排除项）需 Header Authorization: Bearer <token>，
+        // 与 nautilus.auth.token / 环境变量 NAUTILUS_AUTH_TOKEN 一致。
         String token = request.getHeader("Authorization");
 
         // 去除 Bearer 前缀 (如果有)

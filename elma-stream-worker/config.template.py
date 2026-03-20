@@ -5,8 +5,8 @@
 # Java 调度中心的 REST API 基础 URL
 BASE_URL = "http://localhost:8080/api/v1/tasks"
 
-# API 鉴权 Token（需与 application.yml 中 nautilus.auth.token 或环境变量 NAUTILUS_AUTH_TOKEN 一致）
-AUTH_TOKEN = "change-me"
+# 与后端 nautilus.auth.token 一致；main.py 默认读取环境变量 NAUTILUS_AUTH_TOKEN（未设置则为 changeme）
+# export NAUTILUS_AUTH_TOKEN=your-secret
 
 # ==================== Worker 配置 ====================
 # 当前 Worker 节点的唯一标识符

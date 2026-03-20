@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Nautilus Media Cloud - Elma Stream Worker (Data Plane)
-流媒体调度中台 - Python 异步工作节点
+Nautilus - Elma Stream Worker（数据面）
+从 Java 调度服务拉取任务并执行媒体提取（示例项目）。
 
 技术栈:
 - Python 3.10+
@@ -15,9 +15,11 @@ Powered by Yorushika (ヨルシカ) 🌙
 
 import asyncio
 import logging
+import os
 import sqlite3
 import sys
 import shutil
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Callable
 
@@ -28,12 +30,16 @@ import yt_dlp
 # ==================== 全局配置 ====================
 BASE_URL = "http://localhost:8080/api/v1/tasks"
 WORKER_ID = "Elma-Node-01"
+# 与 amy-dispatch-center 中 nautilus.auth.token / 环境变量 NAUTILUS_AUTH_TOKEN 一致
+AUTH_TOKEN = os.environ.get("NAUTILUS_AUTH_TOKEN", "changeme")
 POLL_INTERVAL = 3  # 轮询间隔(秒)
 REQUEST_TIMEOUT = 30.0  # HTTP 请求超时(秒)
 
 # 项目根目录 (main.py 所在目录)，用于创建 downloads
 WORKER_ROOT = Path(__file__).resolve().parent
 DOWNLOAD_DIR = WORKER_ROOT / "downloads"
+LOG_DIR = WORKER_ROOT / "logs"
+LOG_FILE = LOG_DIR / "worker.log"
 
 
 # ==================== 日志配置 ====================
@@ -45,6 +51,8 @@ def setup_logging() -> logging.Logger:
     """
     logger = logging.getLogger("ElmaWorker")
     logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+    logger.propagate = False
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
@@ -54,7 +62,20 @@ def setup_logging() -> logging.Logger:
         datefmt="%Y-%m-%d %H:%M:%S"
     )
     console_handler.setFormatter(formatter)
+
+    # 日志落盘，便于排障追溯
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=10 * 1024 * 1024,
+        backupCount=7,
+        encoding="utf-8"
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+
     logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
     return logger
 
 
@@ -69,19 +90,6 @@ def ensure_downloads_dir() -> Path:
 
 
 # ==================== HTTP 客户端 ====================
-def _auth_token() -> str:
-    """从环境变量或 config 读取鉴权 Token，与调度中心 nautilus.auth.token 保持一致"""
-    import os
-    token = os.environ.get("NAUTILUS_AUTH_TOKEN")
-    if token:
-        return token
-    try:
-        import config
-        return getattr(config, "AUTH_TOKEN", "change-me")
-    except Exception:
-        return "change-me"
-
-
 async def create_http_client() -> httpx.AsyncClient:
     """创建异步 HTTP 客户端"""
     return httpx.AsyncClient(
@@ -89,7 +97,7 @@ async def create_http_client() -> httpx.AsyncClient:
         headers={
             "Content-Type": "application/json; charset=utf-8",
             "User-Agent": f"ElmaWorker/{WORKER_ID}",
-            "Authorization": f"Bearer {_auth_token()}"
+            "Authorization": f"Bearer {AUTH_TOKEN}",
         }
     )
 

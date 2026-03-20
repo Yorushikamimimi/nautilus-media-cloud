@@ -136,7 +136,7 @@ java -jar amy-dispatch-center/target/amy-dispatch-center-1.0.0.jar
 ║                                                           ║
 ║     🎵 Amy Dispatch Center 启动成功                       ║
 ║                                                           ║
-║     夜行 - 流媒体调度中台核心控制面                        ║
+║     夜行 - 任务调度控制面（示例）                          ║
 ║     Powered by Yorushika (ヨルシカ)                       ║
 ║                                                           ║
 ║     API Base URL: http://localhost:8080/api/v1/tasks     ║
@@ -366,7 +366,7 @@ SELECT * FROM pg_stat_user_indexes WHERE schemaname = 'public';
 
 ## 🎉 部署成功
 
-恭喜！你的流媒体调度中台核心控制面已成功部署。
+恭喜！Java 任务调度控制面（示例）已成功部署。
 
 **下一步:**
 1. 开发工作节点 (elma-stream-worker) 调用拉取接口

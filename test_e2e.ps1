@@ -1,8 +1,14 @@
-# Nautilus Media Cloud - 端到端测试脚本
-# 演示 Java 调度中心 + Python Worker 完整工作流程
+# Nautilus - 端到端测试脚本
+# 演示 Java 控制面 + Python Worker 数据面
+
+$AuthToken = if ($env:NAUTILUS_AUTH_TOKEN) { $env:NAUTILUS_AUTH_TOKEN } else { "changeme" }
+$ApiHeaders = @{
+    Authorization = "Bearer $AuthToken"
+}
+$env:NAUTILUS_AUTH_TOKEN = $AuthToken
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "🎵 Nautilus Media Cloud - 端到端测试" -ForegroundColor Cyan
+Write-Host "🎵 Nautilus - 端到端测试" -ForegroundColor Cyan
 Write-Host "   控制面 (Java) + 数据面 (Python) 联合测试" -ForegroundColor Cyan
 Write-Host "   Powered by Yorushika (ヨルシカ) 🌙" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -12,7 +18,7 @@ Write-Host ""
 Write-Host "[1/5] 检查 Java 调度中心..." -ForegroundColor Yellow
 
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:8080/api/v1/tasks/health" -TimeoutSec 3 -UseBasicParsing
+    $response = Invoke-WebRequest -Uri "http://localhost:8080/api/v1/tasks/health" -Headers $ApiHeaders -TimeoutSec 3 -UseBasicParsing
     if ($response.StatusCode -eq 200) {
         Write-Host "   ✓ Java 调度中心在线" -ForegroundColor Green
     }
@@ -68,6 +74,7 @@ foreach ($task in $tasks) {
         $response = Invoke-RestMethod `
             -Uri "http://localhost:8080/api/v1/tasks" `
             -Method POST `
+            -Headers $ApiHeaders `
             -ContentType "application/json; charset=utf-8" `
             -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
         
@@ -96,7 +103,8 @@ Start-Sleep -Seconds 1
 try {
     $response = Invoke-RestMethod `
         -Uri "http://localhost:8080/api/v1/tasks/pending?workerNode=Test-Node" `
-        -Method GET
+        -Method GET `
+        -Headers $ApiHeaders
     
     if ($response.code -eq 200 -and $response.data) {
         Write-Host "   ✓ 有待处理任务: $($response.data.taskName)" -ForegroundColor Green
@@ -141,7 +149,8 @@ foreach ($taskId in $createdTaskIds) {
     try {
         $response = Invoke-RestMethod `
             -Uri "http://localhost:8080/api/v1/tasks/$taskId" `
-            -Method GET
+            -Method GET `
+            -Headers $ApiHeaders
         
         if ($response.code -eq 200) {
             $status = $response.data.status

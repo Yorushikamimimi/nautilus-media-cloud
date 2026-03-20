@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
  * 业务异常类
  * 用于封装业务逻辑中的异常情况
  *
- * @author Nautilus Media Cloud
+ * @author nautilus-media-cloud
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

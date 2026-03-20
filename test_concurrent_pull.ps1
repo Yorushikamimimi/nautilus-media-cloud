@@ -5,9 +5,10 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 配置
+# 配置（与后端 NAUTILUS_AUTH_TOKEN / 默认 changeme 一致）
 $BaseUrl = "http://localhost:8080/api/v1/tasks"
 $ConcurrentNodes = 10
+$AuthToken = if ($env:NAUTILUS_AUTH_TOKEN) { $env:NAUTILUS_AUTH_TOKEN } else { "changeme" }
 
 Write-Host "Yorushika 主题并发拉取测试" -ForegroundColor Cyan
 Write-Host "========================================"
@@ -22,9 +23,10 @@ for ($i = 1; $i -le $ConcurrentNodes; $i++) {
     Write-Host "[$i] 节点 $workerNode 开始拉取..."
 
     $job = Start-Job -ScriptBlock {
-        param($url, $worker)
+        param($url, $worker, $token)
         try {
-            $response = Invoke-RestMethod -Uri "$url/pending?workerNode=$worker" -Method Get -ErrorAction Stop
+            $headers = @{ Authorization = "Bearer $token" }
+            $response = Invoke-RestMethod -Uri "$url/pending?workerNode=$worker" -Method Get -Headers $headers -ErrorAction Stop
             return [PSCustomObject]@{
                 worker   = $worker
                 code     = $response.code
@@ -47,7 +49,7 @@ for ($i = 1; $i -le $ConcurrentNodes; $i++) {
                 error    = $_.Exception.Message
             }
         }
-    } -ArgumentList $BaseUrl, $workerNode
+    } -ArgumentList $BaseUrl, $workerNode, $AuthToken
 
     $jobs += $job
 }
