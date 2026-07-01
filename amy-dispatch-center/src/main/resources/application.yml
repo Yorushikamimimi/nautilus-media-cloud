@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8081
   servlet:
     context-path: /
 
@@ -10,7 +10,7 @@ spring:
   # PostgreSQL 数据源配置
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nautilus_dispatch?stringtype=unspecified}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/nautilus_dispatch?stringtype=unspecified}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     hikari:
@@ -85,6 +85,9 @@ logging:
 nautilus:
   auth:
     token: ${NAUTILUS_AUTH_TOKEN:changeme}
+  download:
+    # 允许下载的基目录；Worker 写入的 filePath 必须在此目录下，防止路径穿越
+    base-dir: ${NAUTILUS_DOWNLOAD_BASE_DIR:./downloads}
 
 task:
   retry:

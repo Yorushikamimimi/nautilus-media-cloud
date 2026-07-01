@@ -847,7 +847,7 @@
   <script>
     const { createApp, ref, computed, onMounted, onUnmounted } = Vue
 
-    const API_BASE = 'http://localhost:8080/api/v1/tasks'
+    const API_BASE = window.NAUTILUS_API_BASE || 'http://localhost:8081/api/v1/tasks'
 
     const app = createApp({
       setup() {
