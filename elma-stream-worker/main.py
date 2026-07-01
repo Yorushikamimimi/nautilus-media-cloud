@@ -28,7 +28,7 @@ import yt_dlp
 
 
 # ==================== 全局配置 ====================
-BASE_URL = "http://localhost:8080/api/v1/tasks"
+BASE_URL = "http://localhost:8081/api/v1/tasks"
 WORKER_ID = "Elma-Node-01"
 # 与 amy-dispatch-center 中 nautilus.auth.token / 环境变量 NAUTILUS_AUTH_TOKEN 一致
 AUTH_TOKEN = os.environ.get("NAUTILUS_AUTH_TOKEN", "changeme")
@@ -279,9 +279,14 @@ async def extract_media(client: httpx.AsyncClient, task_data: Dict[str, Any]) ->
         logger.info("夜明けと蛍 - 原生 API 提取成功！文件落盘，元数据准备回调...")
         return True, meta_info, None
 
-    except (PermissionError, FileNotFoundError, sqlite3.OperationalError) as e:
+    except (PermissionError, FileNotFoundError) as e:
         logger.error(f"{COOKIE_READ_MSG} | 原始异常: {e}")
         return False, None, COOKIE_READ_MSG
+    except sqlite3.OperationalError as e:
+        # yt-dlp 内部也使用 sqlite，不一定是 cookie 问题；当作通用下载错误处理
+        error_msg = str(e)
+        logger.error(f"春泥棒 - 数据库操作异常（可能为 yt-dlp 内部缓存错误）: {error_msg}")
+        return False, None, f"sqlite error: {error_msg}"
     except yt_dlp.utils.DownloadError as e:
         error_msg = str(e)
         logger.error(f"春泥棒 - 抓取链路断裂，花瓣散落: {error_msg}")
@@ -319,12 +324,12 @@ async def report_status(
     payload: Dict[str, Any] = {
         "status": status,
         "errorLog": error_log,
+        "workerNode": WORKER_ID,
     }
     if meta_info is not None:
         payload["metaInfo"] = meta_info
-    
-    # 将 progress 也放入请求体，如果调用方没传它会直接是 None，不影响原来逻辑
-    if "progress" in locals() and progress is not None:
+
+    if progress is not None:
         payload["progress"] = progress
 
     try:
