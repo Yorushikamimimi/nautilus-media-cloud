@@ -75,7 +75,7 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean reportTaskStatus(Long taskId, String status, String errorLog, Map<String, Object> metaInfo,
-            String progress) {
+            String progress, String workerNode) {
         if (taskId == null) {
             throw new ServiceException("taskId cannot be null");
         }
@@ -93,7 +93,7 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
             }
 
             if (SysMediaTask.TaskStatus.RUNNING.equals(status)) {
-                baseMapper.touchTaskHeartbeat(taskId);
+                baseMapper.touchTaskHeartbeat(taskId, workerNode);
                 existingTask.setProgress(progress);
                 existingTask.setUpdatedAt(LocalDateTime.now());
                 eventPublisher.publishEvent(new TaskUpdateEvent(this, existingTask));

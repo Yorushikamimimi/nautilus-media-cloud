@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,6 +27,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.File;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -44,6 +47,9 @@ public class MediaTaskController {
     private final ISseService sseService;
     private final WorkerRegistry workerRegistry;
     private final JdbcTemplate jdbcTemplate;
+
+    @Value("${nautilus.download.base-dir:./downloads}")
+    private String downloadBaseDir;
 
     @GetMapping(value = "/stream", produces = "text/event-stream")
     public SseEmitter streamTasks() {
@@ -78,6 +84,7 @@ public class MediaTaskController {
             String status = requestBody.get("status") != null ? requestBody.get("status").toString() : null;
             String errorLog = requestBody.get("errorLog") != null ? requestBody.get("errorLog").toString() : null;
             String progress = requestBody.get("progress") != null ? requestBody.get("progress").toString() : null;
+            String workerNode = requestBody.get("workerNode") != null ? requestBody.get("workerNode").toString() : null;
 
             @SuppressWarnings("unchecked")
             Map<String, Object> metaInfo = requestBody.get("metaInfo") instanceof Map
@@ -93,7 +100,7 @@ public class MediaTaskController {
                 return AjaxResult.error("status must be RUNNING, SUCCESS or FAILED");
             }
 
-            boolean success = taskService.reportTaskStatus(taskId, status, errorLog, metaInfo, progress);
+            boolean success = taskService.reportTaskStatus(taskId, status, errorLog, metaInfo, progress, workerNode);
             if (!success) {
                 return AjaxResult.error("Update task status failed");
             }
@@ -109,28 +116,33 @@ public class MediaTaskController {
 
     @GetMapping("/stats")
     public AjaxResult getStats() {
-        List<SysMediaTask> list = taskService.listTasks(null);
-        long total = list.size();
-        long pending = list.stream().filter(t -> SysMediaTask.TaskStatus.PENDING.equals(t.getStatus())).count();
-        long running = list.stream().filter(t -> SysMediaTask.TaskStatus.RUNNING.equals(t.getStatus())).count();
-        long success = list.stream().filter(t -> SysMediaTask.TaskStatus.SUCCESS.equals(t.getStatus())).count();
-        long failed = list.stream().filter(t -> SysMediaTask.TaskStatus.FAILED.equals(t.getStatus())).count();
+        // SQL 聚合替代全量拉取+内存 stream，避免数据量大时 OOM
+        Map<String, Object> statusCounts = jdbcTemplate.queryForMap("""
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE status = 'PENDING') AS pending,
+                    COUNT(*) FILTER (WHERE status = 'RUNNING') AS running,
+                    COUNT(*) FILTER (WHERE status = 'SUCCESS') AS success,
+                    COUNT(*) FILTER (WHERE status = 'FAILED') AS failed
+                FROM sys_media_task
+                """);
+
+        long total = ((Number) statusCounts.getOrDefault("total", 0)).longValue();
+        long pending = ((Number) statusCounts.getOrDefault("pending", 0)).longValue();
+        long running = ((Number) statusCounts.getOrDefault("running", 0)).longValue();
+        long success = ((Number) statusCounts.getOrDefault("success", 0)).longValue();
+        long failed = ((Number) statusCounts.getOrDefault("failed", 0)).longValue();
 
         LocalDate today = LocalDate.now();
-        long todayTrafficBytes = list.stream()
-                .filter(t -> SysMediaTask.TaskStatus.SUCCESS.equals(t.getStatus()))
-                .filter(t -> t.getUpdatedAt() != null && t.getUpdatedAt().toLocalDate().isEqual(today))
-                .mapToLong(t -> {
-                    if (t.getMetaInfo() != null && t.getMetaInfo().get("fileSize") != null) {
-                        try {
-                            return Long.parseLong(t.getMetaInfo().get("fileSize").toString());
-                        } catch (Exception ignored) {
-                            return 0L;
-                        }
-                    }
-                    return 0L;
-                })
-                .sum();
+        Long todayTrafficBytes = jdbcTemplate.queryForObject("""
+                SELECT COALESCE(SUM((meta_info->>'fileSize')::bigint), 0)
+                FROM sys_media_task
+                WHERE status = 'SUCCESS'
+                  AND updated_at::date = ?
+                """, Long.class, today);
+        if (todayTrafficBytes == null) {
+            todayTrafficBytes = 0L;
+        }
 
         int onlineWorkers = workerRegistry.getOnlineWorkerCount();
 
@@ -332,6 +344,14 @@ public class MediaTaskController {
             File file = new File(filePath);
             if (!file.exists()) {
                 log.error("File not found on disk: {}", filePath);
+                return org.springframework.http.ResponseEntity.notFound().build();
+            }
+
+            // 路径穿越防护：规范化后校验必须在允许的下载基目录内
+            Path baseDir = Paths.get(downloadBaseDir).toAbsolutePath().normalize();
+            Path resolved = file.toPath().toRealPath();
+            if (!resolved.startsWith(baseDir)) {
+                log.error("Path traversal attempt blocked: {} not under base dir {}", resolved, baseDir);
                 return org.springframework.http.ResponseEntity.notFound().build();
             }
 

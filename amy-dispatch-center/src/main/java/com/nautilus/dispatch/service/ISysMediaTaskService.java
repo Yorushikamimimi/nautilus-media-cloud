@@ -10,7 +10,7 @@ public interface ISysMediaTaskService {
     SysMediaTask pullPendingTask(String workerNode);
 
     boolean reportTaskStatus(Long taskId, String status, String errorLog, Map<String, Object> metaInfo,
-            String progress);
+            String progress, String workerNode);
 
     List<SysMediaTask> listTasks(String status);
 

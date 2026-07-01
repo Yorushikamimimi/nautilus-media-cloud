@@ -23,7 +23,7 @@ public interface SysMediaTaskMapper extends BaseMapper<SysMediaTask> {
             @Param("errorLog") String errorLog,
             @Param("metaInfo") Map<String, Object> metaInfo);
 
-    int touchTaskHeartbeat(@Param("taskId") Long taskId);
+    int touchTaskHeartbeat(@Param("taskId") Long taskId, @Param("workerNode") String workerNode);
 
     int scheduleTaskRetry(@Param("taskId") Long taskId,
             @Param("retryCount") Integer retryCount,

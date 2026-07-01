@@ -13,12 +13,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 拦截所有 /api/* 的请求
-        // 但放开 SSE 的 stream 接口，以免受前端浏览器原生 EventSource 传鉴权头的限制
+        // 拦截所有 /api/* 的请求；SSE /stream 通过 URL query param ?token= 传 token
+        // （浏览器 EventSource 不支持自定义请求头，AuthInterceptor 已兼容 query param fallback）
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
-                        "/api/v1/tasks/stream",
                         "/api/v1/tasks/*/download");
     }
 }

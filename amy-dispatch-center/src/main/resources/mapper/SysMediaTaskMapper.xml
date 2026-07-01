@@ -70,6 +70,7 @@
         SET updated_at = CURRENT_TIMESTAMP
         WHERE task_id = #{taskId}
           AND status = 'RUNNING'
+          AND worker_node = #{workerNode}
     </update>
 
     <update id="scheduleTaskRetry">
