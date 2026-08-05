@@ -22,7 +22,7 @@ createdb -U postgres nautilus_dispatch
 
 ### 1.2 执行建表脚本
 ```bash
-cd d:\Workspace\cursor_projects\nautilus-media-cloud
+cd d:\Workspace\SelfProject\nautilus-media-cloud
 psql -U postgres -d nautilus_dispatch -f amy-dispatch-center/src/main/resources/db/schema.sql
 ```
 
