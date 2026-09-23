@@ -80,10 +80,12 @@ fi
 # 检查 Java 调度中心是否在线
 echo ""
 echo -e "${YELLOW}[4/4] 检查 Java 调度中心连接...${NC}"
-if curl -s -f -m 3 "http://localhost:8080/api/v1/tasks/health" > /dev/null 2>&1; then
+API_BASE_URL="${NAUTILUS_API_BASE_URL:-http://localhost:8081/api/v1/tasks}"
+AUTH_TOKEN="${NAUTILUS_AUTH_TOKEN:-changeme}"
+if curl -s -f -m 3 -H "Authorization: Bearer ${AUTH_TOKEN}" "${API_BASE_URL}/health" > /dev/null 2>&1; then
     echo -e "${GREEN}   ✓ Java 调度中心在线${NC}"
 else
-    echo -e "${YELLOW}   ⚠ Java 调度中心未响应 (http://localhost:8080)${NC}"
+    echo -e "${YELLOW}   ⚠ Java 调度中心未响应 (${API_BASE_URL})${NC}"
     echo -e "${YELLOW}   请确保 amy-dispatch-center 已启动${NC}"
     echo ""
     echo -e "${YELLOW}是否继续启动 Worker? (Y/N)${NC}"

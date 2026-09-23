@@ -62,13 +62,16 @@ if ($missingPackages.Count -gt 0) {
 # 检查 Java 调度中心是否在线
 Write-Host ""
 Write-Host "[4/4] 检查 Java 调度中心连接..." -ForegroundColor Yellow
+$ApiBaseUrl = if ($env:NAUTILUS_API_BASE_URL) { $env:NAUTILUS_API_BASE_URL } else { "http://localhost:8081/api/v1/tasks" }
+$AuthToken = if ($env:NAUTILUS_AUTH_TOKEN) { $env:NAUTILUS_AUTH_TOKEN } else { "changeme" }
+$HealthHeaders = @{ Authorization = "Bearer $AuthToken" }
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:8080/api/v1/tasks/health" -TimeoutSec 3 -UseBasicParsing
+    $response = Invoke-WebRequest -Uri "$ApiBaseUrl/health" -Headers $HealthHeaders -TimeoutSec 3 -UseBasicParsing
     if ($response.StatusCode -eq 200) {
         Write-Host "   ✓ Java 调度中心在线" -ForegroundColor Green
     }
 } catch {
-    Write-Host "   ⚠ Java 调度中心未响应 (http://localhost:8080)" -ForegroundColor Yellow
+    Write-Host "   ⚠ Java 调度中心未响应 ($ApiBaseUrl)" -ForegroundColor Yellow
     Write-Host "   请确保 amy-dispatch-center 已启动" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "是否继续启动 Worker? (Y/N)" -ForegroundColor Yellow

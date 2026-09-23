@@ -19,6 +19,7 @@ import os
 import sqlite3
 import sys
 import shutil
+import socket
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Callable
@@ -28,16 +29,19 @@ import yt_dlp
 
 
 # ==================== 全局配置 ====================
-BASE_URL = "http://localhost:8081/api/v1/tasks"
-WORKER_ID = "Elma-Node-01"
+BASE_URL = os.environ.get("NAUTILUS_API_BASE_URL", "http://localhost:8081/api/v1/tasks")
+WORKER_ID = os.environ.get("NAUTILUS_WORKER_ID", f"{socket.gethostname()}-{os.getpid()}")
 # 与 amy-dispatch-center 中 nautilus.auth.token / 环境变量 NAUTILUS_AUTH_TOKEN 一致
 AUTH_TOKEN = os.environ.get("NAUTILUS_AUTH_TOKEN", "changeme")
 POLL_INTERVAL = 3  # 轮询间隔(秒)
 REQUEST_TIMEOUT = 30.0  # HTTP 请求超时(秒)
 
-# 项目根目录 (main.py 所在目录)，用于创建 downloads
+# 默认与 amy-dispatch-center/downloads 共享；可通过环境变量覆盖
 WORKER_ROOT = Path(__file__).resolve().parent
-DOWNLOAD_DIR = WORKER_ROOT / "downloads"
+DOWNLOAD_DIR = Path(os.environ.get(
+    "NAUTILUS_DOWNLOAD_DIR",
+    WORKER_ROOT.parent / "amy-dispatch-center" / "downloads",
+)).expanduser().resolve()
 LOG_DIR = WORKER_ROOT / "logs"
 LOG_FILE = LOG_DIR / "worker.log"
 

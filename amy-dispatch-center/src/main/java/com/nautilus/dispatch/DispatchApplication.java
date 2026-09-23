@@ -31,7 +31,7 @@ public class DispatchApplication {
                 ║     夜行 - 任务调度控制面（示例）                          ║
                 ║     Theme: Yorushika (ヨルシカ)                           ║
                 ║                                                           ║
-                ║     API Base URL: http://localhost:8080/api/v1/tasks     ║
+                ║     API Base URL: http://localhost:8081/api/v1/tasks     ║
                 ║                                                           ║
                 ╚═══════════════════════════════════════════════════════════╝
                 """);

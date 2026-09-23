@@ -3,7 +3,7 @@
 
 # ==================== 调度中心配置 ====================
 # Java 调度中心的 REST API 基础 URL
-BASE_URL = "http://localhost:8080/api/v1/tasks"
+BASE_URL = "http://localhost:8081/api/v1/tasks"  # NAUTILUS_API_BASE_URL 可覆盖
 
 # 与后端 nautilus.auth.token 一致；main.py 默认读取环境变量 NAUTILUS_AUTH_TOKEN（未设置则为 changeme）
 # export NAUTILUS_AUTH_TOKEN=your-secret
@@ -11,7 +11,7 @@ BASE_URL = "http://localhost:8080/api/v1/tasks"
 # ==================== Worker 配置 ====================
 # 当前 Worker 节点的唯一标识符
 # 建议格式: Elma-Node-{序号} 或 {主机名}-Worker-{序号}
-WORKER_ID = "Elma-Node-01"
+WORKER_ID = "<hostname>-<pid>"  # 默认由 main.py 自动生成；用 NAUTILUS_WORKER_ID 固定覆盖
 
 # 轮询间隔(秒)
 # 建议范围: 1-10 秒

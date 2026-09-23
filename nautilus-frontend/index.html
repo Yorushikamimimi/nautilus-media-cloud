@@ -1084,13 +1084,13 @@
               closeCreateModal()
               handleUnauthorized()
             } else if (e.message === 'TIMEOUT' || e.name === 'AbortError') {
-              formError.value = '春泥棒 - 请求超时，请检查调度中心是否启动（端口 8080）'
+              formError.value = '春泥棒 - 请求超时，请检查调度中心是否启动（端口 8081）'
             } else if (e.message && e.message.startsWith('HTTP_')) {
               formError.value = `春泥棒 - 服务端错误 ${e.message.replace('HTTP_', '')}，请检查后端日志`
             } else if (e.message === 'JSON_PARSE_ERROR') {
               formError.value = '春泥棒 - 服务端返回了非法响应，请检查后端日志'
             } else {
-              formError.value = '春泥棒 - 无法连接调度中心，请检查后端服务（端口 8080）'
+              formError.value = '春泥棒 - 无法连接调度中心，请检查后端服务（端口 8081）'
             }
           } finally {
             submitting.value = false

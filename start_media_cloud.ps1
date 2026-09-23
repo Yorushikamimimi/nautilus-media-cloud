@@ -1,9 +1,8 @@
 $ErrorActionPreference = "Stop"
 
-$BackendPort = 8080
-$FrontendPort = 5173
-$DbPort = 5432
-$PgService = "postgresql-x64-16"
+$BackendPort = 8081
+$FrontendPort = 5174
+$DbPort = 5433
 $AuthToken = if ($env:NAUTILUS_AUTH_TOKEN) { $env:NAUTILUS_AUTH_TOKEN } else { "changeme" }
 $env:NAUTILUS_AUTH_TOKEN = $AuthToken
 
@@ -11,6 +10,10 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir = Join-Path $Root "amy-dispatch-center"
 $FrontendDir = Join-Path $Root "nautilus-frontend"
 $WorkerDir = Join-Path $Root "elma-stream-worker"
+$SharedDownloadDir = Join-Path $BackendDir "downloads"
+$env:NAUTILUS_DOWNLOAD_BASE_DIR = $SharedDownloadDir
+$env:NAUTILUS_DOWNLOAD_DIR = $SharedDownloadDir
+$env:NAUTILUS_API_BASE_URL = "http://localhost:$BackendPort/api/v1/tasks"
 $JarPath = Join-Path $BackendDir "target\amy-dispatch-center-1.0.0.jar"
 
 $status = @{
@@ -50,43 +53,18 @@ function Test-PortListening {
     return [bool](netstat -ano 2>$null | Select-String -Pattern $pattern)
 }
 
-function Kill-Port {
-    param([int]$Port)
-    $pattern = ":{0}\s+.*LISTENING" -f $Port
-    $lines = netstat -ano 2>$null | Select-String -Pattern $pattern
-    foreach ($line in $lines) {
-        try {
-            $parts = ($line.ToString() -replace "\s+", " ").Trim().Split(" ")
-            # 勿用 $pid：与 PowerShell 只读自动变量 $PID 冲突，Stop 模式下会导致 Kill-Port 直接失败
-            $processId = $parts[-1]
-            if ($processId -as [int]) {
-                Stop-Process -Id ([int]$processId) -Force -ErrorAction SilentlyContinue
-            }
-        } catch {
-            # ignore
-        }
+function Assert-PortAvailable {
+    param([int]$Port, [string]$Service)
+    if (Test-PortListening $Port) {
+        throw "$Service 端口 $Port 已被占用。请检查占用进程后自行处理；启动脚本不会结束现有进程。"
     }
 }
 
 function Ensure-Database {
-    if (Test-PortListening $DbPort) {
-        Write-Ok "PostgreSQL 已在线，端口 $DbPort"
-        return
-    }
-
-    Write-Info "PostgreSQL 未监听，尝试启动服务 $PgService ..."
-    try {
-        Start-Service -Name $PgService -ErrorAction SilentlyContinue
-    } catch {
-        # ignore and re-check port
-    }
-    Start-Sleep -Seconds 2
-
     if (-not (Test-PortListening $DbPort)) {
-        throw "PostgreSQL 未启动，任务无法落库。请先手动启动服务 $PgService。"
+        throw "独立开发 PostgreSQL 未监听端口 $DbPort。请按 docs/LOCAL_SETUP.md 手动准备本项目数据库；启动脚本不会启动或修改现有数据库服务。"
     }
-
-    Write-Ok "PostgreSQL 已启动"
+    Write-Ok "PostgreSQL 端口 $DbPort 已监听"
 }
 
 function Start-Backend {
@@ -117,7 +95,7 @@ function Wait-BackendReady {
     for ($i = 0; $i -lt 20; $i++) {
         try {
             $resp = Invoke-RestMethod -Uri "http://127.0.0.1:$BackendPort/api/v1/tasks/health" -Headers $headers -Method GET -TimeoutSec 4
-            if ($resp.code -eq 200) {
+            if ($resp.code -eq 200 -and $resp.status -eq "RUNNING" -and $resp.database -eq "UP") {
                 $status.Backend = "READY"
                 Write-Ok "后端健康检查通过"
                 return
@@ -177,7 +155,7 @@ function Start-Worker {
 
     if (Get-Command python -ErrorAction SilentlyContinue) {
         Start-Process -FilePath "cmd.exe" `
-            -ArgumentList "/k", "cd /d `"$WorkerDir`" && set NAUTILUS_AUTH_TOKEN=$AuthToken&& echo [Media-Worker] Worker 启动中... && python main.py" `
+            -ArgumentList "/k", "cd /d `"$WorkerDir`" && echo [Media-Worker] Worker 启动中... && python main.py" `
             -WindowStyle Minimized | Out-Null
         $status.Worker = "BOOTING"
         Write-Ok "Worker 已启动（python main.py）"
@@ -186,7 +164,7 @@ function Start-Worker {
 
     if (Get-Command py -ErrorAction SilentlyContinue) {
         Start-Process -FilePath "cmd.exe" `
-            -ArgumentList "/k", "cd /d `"$WorkerDir`" && set NAUTILUS_AUTH_TOKEN=$AuthToken&& echo [Media-Worker] Worker 启动中... && py -3 main.py" `
+            -ArgumentList "/k", "cd /d `"$WorkerDir`" && echo [Media-Worker] Worker 启动中... && py -3 main.py" `
             -WindowStyle Minimized | Out-Null
         $status.Worker = "BOOTING"
         Write-Ok "Worker 已启动（py -3 main.py）"
@@ -231,9 +209,9 @@ try {
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host ""
 
-    Write-Step "[1/8] 释放端口占用..."
-    Kill-Port $BackendPort
-    Kill-Port $FrontendPort
+    Write-Step "[1/8] 检查端口..."
+    Assert-PortAvailable $BackendPort "后端"
+    Assert-PortAvailable $FrontendPort "前端"
     Write-Host ""
 
     Write-Step "[2/8] 检查 PostgreSQL..."

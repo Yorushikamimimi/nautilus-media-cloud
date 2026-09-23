@@ -1,12 +1,13 @@
 # 并发拉取测试脚本 - Yorushika 主题
 # 用法: .\test_concurrent_pull.ps1
+# 警告：会真实领取 PENDING 任务并将其改为 RUNNING，只能对独立开发数据库运行；不是自动化测试通过证据。
 
 # 控制台输出 UTF-8，避免中文乱码
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # 配置（与后端 NAUTILUS_AUTH_TOKEN / 默认 changeme 一致）
-$BaseUrl = "http://localhost:8080/api/v1/tasks"
+$BaseUrl = if ($env:NAUTILUS_API_BASE_URL) { $env:NAUTILUS_API_BASE_URL } else { "http://localhost:8081/api/v1/tasks" }
 $ConcurrentNodes = 10
 $AuthToken = if ($env:NAUTILUS_AUTH_TOKEN) { $env:NAUTILUS_AUTH_TOKEN } else { "changeme" }
 
