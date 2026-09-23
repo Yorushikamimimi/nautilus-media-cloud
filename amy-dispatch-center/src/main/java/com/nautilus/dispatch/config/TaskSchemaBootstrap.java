@@ -29,6 +29,15 @@ public class TaskSchemaBootstrap {
                     ALTER TABLE sys_media_task
                     ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMP NULL
                     """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE sys_media_task
+                    ADD COLUMN IF NOT EXISTS claim_version BIGINT NOT NULL DEFAULT 0
+                    """);
+            jdbcTemplate.execute("""
+                    UPDATE sys_media_task
+                    SET claim_version = 0
+                    WHERE claim_version IS NULL
+                    """);
 
             jdbcTemplate.execute("""
                     UPDATE sys_media_task
@@ -52,7 +61,7 @@ public class TaskSchemaBootstrap {
                     WHERE status = 'RUNNING'
                     """);
 
-            log.info("Task schema bootstrap checked: retry_count/max_retry/next_retry_at");
+            log.info("Task schema bootstrap checked: retry fields and claim_version");
         } catch (Exception e) {
             log.warn("Task schema bootstrap skipped: {}", e.getMessage());
         }

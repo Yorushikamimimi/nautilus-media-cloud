@@ -10,6 +10,7 @@ CREATE TABLE sys_media_task (
     target_url      TEXT NOT NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     worker_node     VARCHAR(100),
+    claim_version   BIGINT NOT NULL DEFAULT 0,
     meta_info       JSONB,
     error_log       TEXT,
     retry_count     INTEGER NOT NULL DEFAULT 0,
@@ -43,6 +44,7 @@ COMMENT ON TABLE sys_media_task IS 'Media task dispatch table';
 COMMENT ON COLUMN sys_media_task.retry_count IS 'Current retry count';
 COMMENT ON COLUMN sys_media_task.max_retry IS 'Maximum retries allowed';
 COMMENT ON COLUMN sys_media_task.next_retry_at IS 'Earliest allowed retry time';
+COMMENT ON COLUMN sys_media_task.claim_version IS 'Monotonic fencing token incremented for each worker claim';
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

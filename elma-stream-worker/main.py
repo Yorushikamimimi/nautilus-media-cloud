@@ -269,7 +269,10 @@ async def extract_media(client: httpx.AsyncClient, task_data: Dict[str, Any]) ->
                     last_report_time = now
                     # 从子线程将协程塞进主线程的事件循环中去执行 HTTP PUT
                     asyncio.run_coroutine_threadsafe(
-                        report_status(client, task_id, "RUNNING", progress=clean_percent),
+                        report_status(
+                            client, task_id, "RUNNING", claim_version=task_data.get("claimVersion"),
+                            progress=clean_percent
+                        ),
                         loop
                     )
 
@@ -302,6 +305,7 @@ async def report_status(
     client: httpx.AsyncClient,
     task_id: int,
     status: str,
+    claim_version: Optional[int],
     error_log: Optional[str] = None,
     meta_info: Optional[Dict[str, Any]] = None,
     progress: Optional[str] = None,
@@ -325,6 +329,7 @@ async def report_status(
         "status": status,
         "errorLog": error_log,
         "workerNode": WORKER_ID,
+        "claimVersion": claim_version,
     }
     if meta_info is not None:
         payload["metaInfo"] = meta_info
@@ -362,16 +367,21 @@ async def execute_task(client: httpx.AsyncClient, task_data: Dict[str, Any]) -> 
     执行单个任务的完整流程：真实下载 -> 元数据解析 -> PUT 回调（含 metaInfo/FAILED 兜底）
     """
     task_id = int(task_data.get("taskId", 0))
+    claim_version = task_data.get("claimVersion")
+    if claim_version is None:
+        logger.error(f"Task {task_id} response has no claimVersion; refusing to process an unfenced claim")
+        return
 
     success, meta_info, error_log = await extract_media(client, task_data)
 
     if success and meta_info is not None:
-        await report_status(client, task_id, "SUCCESS", meta_info=meta_info)
+        await report_status(client, task_id, "SUCCESS", claim_version=claim_version, meta_info=meta_info)
     else:
         await report_status(
             client,
             task_id,
             "FAILED",
+            claim_version=claim_version,
             error_log=error_log or "春泥棒 - 媒体流提取失败，具体见 Worker 日志",
         )
 

@@ -85,6 +85,8 @@ public class MediaTaskController {
             String errorLog = requestBody.get("errorLog") != null ? requestBody.get("errorLog").toString() : null;
             String progress = requestBody.get("progress") != null ? requestBody.get("progress").toString() : null;
             String workerNode = requestBody.get("workerNode") != null ? requestBody.get("workerNode").toString() : null;
+            Long claimVersion = requestBody.get("claimVersion") != null
+                    ? Long.valueOf(requestBody.get("claimVersion").toString()) : null;
 
             @SuppressWarnings("unchecked")
             Map<String, Object> metaInfo = requestBody.get("metaInfo") instanceof Map
@@ -100,7 +102,8 @@ public class MediaTaskController {
                 return AjaxResult.error("status must be RUNNING, SUCCESS or FAILED");
             }
 
-            boolean success = taskService.reportTaskStatus(taskId, status, errorLog, metaInfo, progress, workerNode);
+            boolean success = taskService.reportTaskStatus(
+                    taskId, status, errorLog, metaInfo, progress, workerNode, claimVersion);
             if (!success) {
                 return AjaxResult.error("Update task status failed");
             }

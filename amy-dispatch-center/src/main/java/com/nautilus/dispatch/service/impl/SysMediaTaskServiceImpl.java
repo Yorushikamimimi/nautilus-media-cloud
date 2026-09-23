@@ -55,9 +55,13 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
                 return null;
             }
 
-            baseMapper.updateTaskToRunning(task.getTaskId(), workerNode);
+            int affectedRows = baseMapper.updateTaskToRunning(task.getTaskId(), workerNode);
+            if (affectedRows <= 0) {
+                return null;
+            }
             task.setStatus(SysMediaTask.TaskStatus.RUNNING);
             task.setWorkerNode(workerNode);
+            task.setClaimVersion(safeNonNegativeLong(task.getClaimVersion(), 0L) + 1L);
             task.setNextRetryAt(null);
             task.setUpdatedAt(LocalDateTime.now());
 
@@ -75,7 +79,7 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean reportTaskStatus(Long taskId, String status, String errorLog, Map<String, Object> metaInfo,
-            String progress, String workerNode) {
+            String progress, String workerNode, Long claimVersion) {
         if (taskId == null) {
             throw new ServiceException("taskId cannot be null");
         }
@@ -86,6 +90,10 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
             throw new ServiceException("status must be RUNNING, SUCCESS or FAILED");
         }
 
+        if (workerNode == null || workerNode.trim().isEmpty() || claimVersion == null || claimVersion <= 0) {
+            return false;
+        }
+
         try {
             SysMediaTask existingTask = baseMapper.selectById(taskId);
             if (existingTask == null) {
@@ -93,7 +101,10 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
             }
 
             if (SysMediaTask.TaskStatus.RUNNING.equals(status)) {
-                baseMapper.touchTaskHeartbeat(taskId, workerNode);
+                int affectedRows = baseMapper.touchTaskHeartbeat(taskId, workerNode, claimVersion);
+                if (affectedRows <= 0) {
+                    return false;
+                }
                 existingTask.setProgress(progress);
                 existingTask.setUpdatedAt(LocalDateTime.now());
                 eventPublisher.publishEvent(new TaskUpdateEvent(this, existingTask));
@@ -101,7 +112,8 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
             }
 
             if (SysMediaTask.TaskStatus.SUCCESS.equals(status)) {
-                int affectedRows = baseMapper.updateTaskStatus(taskId, status, null, metaInfo);
+                int affectedRows = baseMapper.updateTaskStatus(
+                        taskId, status, null, metaInfo, workerNode, claimVersion);
                 if (affectedRows <= 0) {
                     return false;
                 }
@@ -118,6 +130,9 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
                 return true;
             }
 
+            if (!matchesClaim(existingTask, workerNode, claimVersion)) {
+                return false;
+            }
             return handleFailureWithRetry(existingTask, errorLog, "worker");
         } catch (ServiceException e) {
             throw e;
@@ -179,6 +194,7 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
         task.setStatus(SysMediaTask.TaskStatus.PENDING);
         task.setTaskId(null);
         task.setWorkerNode(null);
+        task.setClaimVersion(0L);
         task.setErrorLog(null);
         task.setRetryCount(0);
         task.setMaxRetry(resolveMaxRetry(task.getMaxRetry()));
@@ -320,7 +336,8 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
                     backoffSeconds,
                     nextRetryAt));
 
-            int affectedRows = baseMapper.scheduleTaskRetry(task.getTaskId(), nextRetryCount, nextRetryAt, retryLog);
+            int affectedRows = baseMapper.scheduleTaskRetry(task.getTaskId(), nextRetryCount, nextRetryAt,
+                    retryLog, task.getWorkerNode(), task.getClaimVersion());
             if (affectedRows <= 0) {
                 return false;
             }
@@ -346,7 +363,8 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
                 retryCount,
                 maxRetry));
 
-        int affectedRows = baseMapper.markTaskFinalFailed(task.getTaskId(), finalLog);
+        int affectedRows = baseMapper.markTaskFinalFailed(
+                task.getTaskId(), finalLog, task.getWorkerNode(), task.getClaimVersion());
         if (affectedRows <= 0) {
             return false;
         }
@@ -374,6 +392,17 @@ public class SysMediaTaskServiceImpl extends ServiceImpl<SysMediaTaskMapper, Sys
             return defaultValue;
         }
         return value;
+    }
+
+    private long safeNonNegativeLong(Long value, long defaultValue) {
+        return value == null || value < 0 ? defaultValue : value;
+    }
+
+    private boolean matchesClaim(SysMediaTask task, String workerNode, Long claimVersion) {
+        return task != null
+                && SysMediaTask.TaskStatus.RUNNING.equals(task.getStatus())
+                && workerNode.equals(task.getWorkerNode())
+                && claimVersion.equals(task.getClaimVersion());
     }
 
     private long computeBackoffSeconds(int retryAttempt) {

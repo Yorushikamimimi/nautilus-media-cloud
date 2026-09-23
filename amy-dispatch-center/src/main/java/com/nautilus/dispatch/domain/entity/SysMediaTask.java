@@ -44,6 +44,10 @@ public class SysMediaTask implements Serializable {
     @TableField("worker_node")
     private String workerNode;
 
+    /** Monotonically increasing fencing token, incremented on every claim. */
+    @TableField("claim_version")
+    private Long claimVersion;
+
     @TableField(value = "meta_info", typeHandler = JacksonTypeHandler.class)
     private Map<String, Object> metaInfo;
 

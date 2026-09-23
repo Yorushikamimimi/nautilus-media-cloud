@@ -21,15 +21,22 @@ public interface SysMediaTaskMapper extends BaseMapper<SysMediaTask> {
     int updateTaskStatus(@Param("taskId") Long taskId,
             @Param("status") String status,
             @Param("errorLog") String errorLog,
-            @Param("metaInfo") Map<String, Object> metaInfo);
+            @Param("metaInfo") Map<String, Object> metaInfo,
+            @Param("workerNode") String workerNode,
+            @Param("claimVersion") Long claimVersion);
 
-    int touchTaskHeartbeat(@Param("taskId") Long taskId, @Param("workerNode") String workerNode);
+    int touchTaskHeartbeat(@Param("taskId") Long taskId, @Param("workerNode") String workerNode,
+            @Param("claimVersion") Long claimVersion);
 
     int scheduleTaskRetry(@Param("taskId") Long taskId,
             @Param("retryCount") Integer retryCount,
             @Param("nextRetryAt") LocalDateTime nextRetryAt,
-            @Param("errorLog") String errorLog);
+            @Param("errorLog") String errorLog,
+            @Param("workerNode") String workerNode,
+            @Param("claimVersion") Long claimVersion);
 
     int markTaskFinalFailed(@Param("taskId") Long taskId,
-            @Param("errorLog") String errorLog);
+            @Param("errorLog") String errorLog,
+            @Param("workerNode") String workerNode,
+            @Param("claimVersion") Long claimVersion);
 }

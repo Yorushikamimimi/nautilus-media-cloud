@@ -8,6 +8,7 @@
         <result column="target_url" property="targetUrl" jdbcType="VARCHAR"/>
         <result column="status" property="status" jdbcType="VARCHAR"/>
         <result column="worker_node" property="workerNode" jdbcType="VARCHAR"/>
+        <result column="claim_version" property="claimVersion" jdbcType="BIGINT"/>
         <result column="meta_info" property="metaInfo"
                 typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler"
                 jdbcType="OTHER" javaType="java.util.Map"/>
@@ -20,7 +21,7 @@
     </resultMap>
 
     <sql id="BaseColumns">
-        task_id, task_name, target_url, status, worker_node, meta_info, error_log,
+        task_id, task_name, target_url, status, worker_node, claim_version, meta_info, error_log,
         retry_count, max_retry, next_retry_at, created_at, updated_at
     </sql>
 
@@ -49,9 +50,11 @@
         UPDATE sys_media_task
         SET status = 'RUNNING',
             worker_node = #{workerNode},
+            claim_version = claim_version + 1,
             next_retry_at = NULL,
             updated_at = CURRENT_TIMESTAMP
         WHERE task_id = #{taskId}
+          AND status = 'PENDING'
     </update>
 
     <update id="updateTaskStatus">
@@ -63,6 +66,9 @@
             </if>
             updated_at = CURRENT_TIMESTAMP
         WHERE task_id = #{taskId}
+          AND status = 'RUNNING'
+          AND worker_node = #{workerNode}
+          AND claim_version = #{claimVersion}
     </update>
 
     <update id="touchTaskHeartbeat">
@@ -71,6 +77,7 @@
         WHERE task_id = #{taskId}
           AND status = 'RUNNING'
           AND worker_node = #{workerNode}
+          AND claim_version = #{claimVersion}
     </update>
 
     <update id="scheduleTaskRetry">
@@ -82,6 +89,9 @@
             error_log = #{errorLog},
             updated_at = CURRENT_TIMESTAMP
         WHERE task_id = #{taskId}
+          AND status = 'RUNNING'
+          AND worker_node = #{workerNode}
+          AND claim_version = #{claimVersion}
     </update>
 
     <update id="markTaskFinalFailed">
@@ -92,6 +102,9 @@
             error_log = #{errorLog},
             updated_at = CURRENT_TIMESTAMP
         WHERE task_id = #{taskId}
+          AND status = 'RUNNING'
+          AND worker_node = #{workerNode}
+          AND claim_version = #{claimVersion}
     </update>
 
 </mapper>
